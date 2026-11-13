@@ -19,8 +19,15 @@
 #notice{position:fixed;z-index:6;bottom:90px;left:50%;transform:translateX(-50%);padding:7px 14px;background:#18345a;color:white;border-radius:8px;box-shadow:0 4px 14px #163d6420}#notice button{color:#c9ddff;margin-left:12px}#notice button:hover{background:#243f65}
 @media(max-width:750px){.topbar{padding:8px 12px}.mobileBrand{display:flex}.workspace{padding-top:16px}.detail{width:100%}.headTools button{padding:7px 9px}.heading h1{font-size:27px}.blank{min-height:130px}.add{margin-top:6px}.side #lookup{font-size:16px}}
 
-#rowMenu{position:fixed;inset:auto;margin:0;padding:6px;width:min(236px,90vw);border-radius:9px;box-shadow:0 8px 34px #18345a26}
-#rowMenu::backdrop{background:transparent}#rowMenu button{width:100%;text-align:left;padding:7px 10px}#rowMenu label{font-size:13px;margin:4px 10px 8px}
+#rowMenu{position:fixed;inset:auto;margin:0;padding:5px;width:min(270px,calc(100vw - 16px));max-height:calc(100dvh - 16px);overflow:auto;border:1px solid #ccd9eb;border-radius:8px;background:white;box-shadow:0 8px 30px #18345a2b}
+#rowMenu::backdrop{background:transparent}#rowMenu:focus{outline:none}
+#rowMenu .scheduleAction{width:100%;min-height:41px;text-align:left;gap:13px;padding:7px 11px;border-radius:4px}
+#rowMenu .navIcon{width:19px;height:19px;flex:none;color:#526e92}#rowMenu .danger,#rowMenu .danger .navIcon{color:#bc3337}
+#rowMenu small{margin-left:auto;color:var(--dim);font-size:12px}#rowMenu hr{margin:4px 0;border-color:#dce5f2}
+#rowMenu .menuHint{margin:8px 11px;color:var(--dim);font-size:13px}
+.customDate{padding:8px}.customDate label{margin:0 0 8px}.customDate .actions{margin:0;justify-content:flex-end}
+#scheduleMenu .customDate button{display:inline-flex;width:auto;min-height:34px}
+@media(pointer:coarse){#rowMenu .scheduleAction{min-height:45px}}
 .rowMore{width:32px;flex:none;padding:5px;color:var(--dim);opacity:0}.rows article:hover .rowMore,.rowMore:focus-visible,.activeRow .rowMore{opacity:1}@media(hover:none){.rowMore{opacity:1}}
 .planGroup{margin:0 0 7px;border-bottom:1px solid #d5e2f1;padding:6px 0 9px}.rows .planGroup>summary{display:inline-flex;align-items:center;gap:9px;padding:5px 10px;background:#e0ebfa;color:#234365;border-radius:5px;font-weight:650;list-style:none}.planGroup>summary::-webkit-details-marker{display:none}.planGroup>summary::before{content:'';width:7px;height:7px;border:solid currentColor;border-width:1.5px 1.5px 0 0;transform:rotate(45deg);margin:0 3px 0 0}.planGroup[open]>summary::before{transform:rotate(135deg)}.planGroup>summary small{font-size:13px;font-weight:450}.planGroup[open]>summary{margin-bottom:8px}
 #detail .editorHead{min-height:24px;justify-content:flex-end;gap:12px}.editorHead button{width:32px;height:30px;font-size:23px;line-height:1;padding:0}
@@ -50,11 +57,11 @@
   </main>
   <aside class="detail" id="detail" hidden></aside>
 </div>
-<div id="notice" role="status" hidden></div><dialog id="scheduleMenu"></dialog><dialog id="rowMenu" aria-label="任务操作"></dialog><dialog id="archives"><h2>备份与恢复</h2><p class="muted">完整备份保留清单、任务、步骤和备注。CSV 可用 Excel 或其他表格工具按清单筛选。</p>
+<div id="notice" role="status" hidden></div><dialog id="scheduleMenu"></dialog><dialog id="rowMenu" tabindex="-1" aria-label="任务操作"></dialog><dialog id="archives"><h2>备份与恢复</h2><p class="muted">完整备份保留清单、任务、步骤和备注。CSV 可用 Excel 或其他表格工具按清单筛选。</p>
 <div class="archiveActions"><button id="exportJson">下载完整备份 · JSON</button><button id="exportCsv">下载任务表 · CSV</button></div>
 <hr><label>打开完整备份<input id="importFile" type="file" accept=".json,application/json"></label><p id="importInfo" role="status" class="muted"></p><button id="previewFile" hidden>浏览备份</button><label id="restoreMode" hidden><input id="replaceChanged" type="checkbox"> 用备份版本替换同编号但内容不同的记录</label><button id="restore" class="primary" hidden>恢复到私有任务库</button>
 <div id="backupView"></div><p id="restoreReport" role="status"></p><div class="actions"><button id="closeArchive">关闭</button></div></dialog>
-<dialog id="setup"><h2>连接私有任务库</h2><p class="muted">手机和电脑填写同一个私有仓库。令牌仅用于访问 GitHub。</p><form id="connect"><label>GitHub 用户名 / 仓库名<input id="repo" placeholder="你的用户名/todo-data" required autocomplete="off"></label><label>共用的细粒度令牌<input type="password" id="token" required autocomplete="off"></label><label><input type="checkbox" id="remember"> 在这台私人设备上记住令牌</label><p id="setupError" class="error" role="alert"></p><div class="actions"><button class="primary">连接</button><button type="button" id="dismiss">关闭</button><button type="button" id="forget">断开此设备</button></div></form></dialog>
+<dialog id="setup"><h2>连接私有任务库</h2><p class="muted">手机和电脑填写同一个私有仓库。令牌仅用于访问 GitHub。</p><form id="connect"><label>GitHub 用户名 / 仓库名<input id="repo" placeholder="你的用户名/todo-data" required autocomplete="off"></label><label>共用的细粒度令牌<input type="password" id="token" required autocomplete="off"></label><label><input type="checkbox" id="remember" aria-describedby="rememberHint"> 在这台私人设备上记住令牌</label><p class="muted" id="rememberHint">不勾选也能同步。刷新这个标签页无需重填，关闭后重新打开通常需要再输入令牌。</p><p id="setupError" class="error" role="alert"></p><div class="actions"><button class="primary">连接</button><button type="button" id="dismiss">关闭</button><button type="button" id="forget">断开此设备</button></div></form></dialog>
 <dialog id="listBox"><h2>新建清单</h2><form id="listForm"><label>清单名称<input id="listName" required maxlength="60"></label><button class="primary">创建</button><button type="button" id="cancelList">取消</button></form></dialog>
 <script>
 'use strict';
@@ -79,7 +86,7 @@ const taskDrafts=new Map();
 let draftList='';
 const freshTask=(title,list)=>({id:crypto.randomUUID(),title,done:false,star:false,day:'',due:'',list,note:'',steps:[],created:Date.now(),deleted:false});
 function status(s){$('sync').textContent=s}
-function showSetup(){if(busy)return;$('repo').value=config?.repo||localStorage.getItem(key+':repo')||'Racuu/todo-data';$('token').value='';$('setupError').textContent='';$('setup').showModal()}
+function showSetup(){if(busy)return;$('remember').checked=!!localStorage.getItem(key)&&!sessionStorage.getItem(key);$('repo').value=config?.repo||localStorage.getItem(key+':repo')||'Racuu/todo-data';$('token').value='';$('setupError').textContent='';$('setup').showModal()}
 const glyphs={day:'M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M19 5l-1.4 1.4M6.4 17.6L5 19M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0',star:'m12 3 2.8 5.8 6.4.9-4.6 4.5 1.1 6.3-5.7-3-5.7 3 1.1-6.3L2.8 9.7l6.4-.9z',plan:'M4 6h16v15H4z M4 10h16M8 3v5m8-5v5',list:'M4 7h16M4 12h16M4 17h11'};
 function nav(container,id,label){
  const b=button('',()=>choose(id)),ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),path=document.createElementNS(ns,'path');
@@ -201,6 +208,11 @@ async function completeRepeating(record){
   }));
 }
 const uiIcons={
+ star:glyphs.star,list:glyphs.list,
+ done:'M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0 M7.5 12l3 3 6-6',
+ move:'M10 3v9m-3-3 3 3 3-3M3 15h3v3H3z M9 16.5h12 M3 21h3m3 0h12',
+ trash:'M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7',
+ back:'m14 5-7 7 7 7',
  day:'M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M19 5l-1.5 1.5m-11 11L5 19M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0',
  date:'M4 5h16v16H4z M4 10h16 M8 3v4m8-4v4 M8 14h2m3 0h2m-7 3h2',
  repeat:'M4 8h12a4 4 0 0 1 4 4m-3-7 3 3-3 3M20 16H8a4 4 0 0 1-4-4m3 7-3-3 3-3',
@@ -225,6 +237,13 @@ function openPicker(anchor,title){
     menu.style.top=(r.bottom+menu.offsetHeight+gap<=innerHeight-8?r.bottom+gap:Math.max(8,r.top-menu.offsetHeight-gap))+'px';menu.style.visibility='visible';
   };return {menu,align};
 }
+function customDateForm(current,accept,cancel){
+  const form=el('form'),label=el('label','选择日期'),input=el('input'),buttons=el('div'),ok=el('button','确定');
+  form.className='customDate';input.type='date';input.required=true;input.value=current||today();
+  input.setAttribute('aria-label','自定义截止日期');label.append(input);
+  ok.className='primary';buttons.className='actions';buttons.append(button('取消',cancel),ok);form.append(label,buttons);
+  form.onsubmit=e=>{e.preventDefault();if(input.value)accept(input.value)};return form;
+}
 function datePicker(anchor,current,onSelect){
   const {menu,align}=openPicker(anchor,'添加截止日期'),base=today();
   function accept(value){menu.close();onSelect(value)}
@@ -232,10 +251,8 @@ function datePicker(anchor,current,onSelect){
     const item=actionButton(title,key,()=>accept(day));item.append(el('small',weekdayName(day)));menu.append(item);
   }
   const custom=actionButton('选择日期','date',()=>{
-    const form=el('form'),input=el('input'),ok=el('button','确定'),cancel=button('取消',()=>menu.close());
-    input.type='date';input.required=true;input.value=current||base;input.setAttribute('aria-label','自定义截止日期');
-    form.append(input,ok,cancel);form.onsubmit=e=>{e.preventDefault();if(input.value)accept(input.value)};
-    menu.replaceChildren(form);align();input.focus();try{input.showPicker()}catch{}
+    const form=customDateForm(current,accept,()=>menu.close());menu.replaceChildren(form);align();
+    const input=form.querySelector('input');input.focus();try{input.showPicker()}catch{}
   });
   custom.classList.add('divider');menu.append(custom);
   if(current)menu.append(actionButton('移除截止日期','clear',()=>accept('')));
@@ -265,29 +282,111 @@ async function updateTask(id,patch,undoLabel){
     });
   });
 }
+function deleteTask(id){
+  if(confirm('删除这条任务？'))return updateTask(id,{deleted:true},'任务已删除');
+}
+function runTaskAction(id,action){
+  const t=records.get(taskKey(id))?.data;
+  if(busy||!t||t.deleted)return;
+  switch(action){
+    case 'day':return updateTask(id,{day:t.day===today()?'':today()});
+    case 'star':return updateTask(id,{star:!t.star});
+    case 'done':return updateTask(id,{done:!t.done},t.done?'已恢复待办':'任务已完成');
+    case 'delete':return deleteTask(id);
+  }
+}
+function taskShortcut(e){
+  if(e.isComposing||e.repeat||e.altKey||e.metaKey||e.shiftKey||(e.ctrlKey&&e.key.toLowerCase()==='delete')||
+     e.target.closest('input,textarea,select,[contenteditable=true]'))return;
+  return {t:'day',d:'done',delete:'delete'}[e.key.toLowerCase()];
+}
 function taskMenu(t,anchor){
-  const menu=$('rowMenu');menu.replaceChildren();
-  const chooseAction=(name,patch,label)=>menu.append(button(name,()=>{menu.close();updateTask(t.id,patch,label)}));
-  chooseAction(t.day===today()?'移出我的一天':'加入我的一天',{day:t.day===today()?'':today()});
-  chooseAction(t.star?'取消重要':'标为重要',{star:!t.star});
-  const dueAction=button('设置截止日期',()=>{menu.close();const anchor=$('heading');datePicker(anchor,t.due,value=>updateTask(t.id,value?{due:value}:{due:'',repeat:'',repeatAnchor:''}))});menu.append(dueAction);
-  const label=el('label','移动到清单'),select=el('select'),lists=sortedLists();
-  if(!t.list){const placeholder=new Option(lists.length?'选择清单':'请先新建清单','');placeholder.disabled=true;select.add(placeholder)}
-  lists.forEach(l=>select.add(new Option(l.name,l.id)));select.value=t.list;select.disabled=!lists.length;
-  select.onchange=()=>{menu.close();updateTask(t.id,{list:select.value},'已移动任务')};label.append(select);menu.append(label);
-  menu.append(button('关闭',()=>menu.close()));menu.showModal();
-  const x=Math.max(8,Math.min(innerWidth-menu.offsetWidth-8,anchor.x)),y=Math.max(8,Math.min(innerHeight-menu.offsetHeight-8,anchor.y));
-  menu.style.left=x+'px';menu.style.top=y+'px';
+  if(busy)return;
+  const menu=$('rowMenu');
+  let page='actions';
+  function position(){
+    menu.style.left=Math.max(8,Math.min(innerWidth-menu.offsetWidth-8,anchor.x))+'px';
+    menu.style.top=Math.max(8,Math.min(innerHeight-menu.offsetHeight-8,anchor.y))+'px';
+  }
+  function item(label,icon,onClick,hint){
+    const b=actionButton(label,icon,onClick);
+    if(hint){const k=el('small',hint);k.setAttribute('aria-hidden','true');b.append(k)}
+    menu.append(b);return b;
+  }
+  function execute(fn){menu.close();return fn()}
+  function action(label,icon,key,hint){
+    return item(label,icon,()=>execute(()=>runTaskAction(t.id,key)),hint);
+  }
+  function setDue(value){
+    return execute(()=>updateTask(t.id,{due:value}));
+  }
+  function movePage(){
+    page='lists';menu.replaceChildren();
+    const back=item('返回任务操作','back',()=>main(true));
+    menu.append(el('hr'));
+    const lists=sortedLists();
+    for(const l of lists){
+      const b=item(l.name,'list',()=>execute(()=>updateTask(t.id,{list:l.id},'已移动任务')));
+      if(l.id===t.list){b.disabled=true;b.append(el('small','当前清单'))}
+    }
+    if(!lists.some(l=>l.id!==t.list)){const help=el('p','请先在侧栏新建目标清单。');help.className='menuHint';menu.append(help)}
+    position();(menu.querySelector('hr ~ button:enabled')||back).focus();
+  }
+  function datePage(){
+    page='date';menu.replaceChildren();
+    const form=customDateForm(t.due,setDue,()=>main(true));menu.append(form);
+    position();const input=form.querySelector('input');input.focus();try{input.showPicker()}catch{}
+  }
+  function main(focus){
+    page='actions';menu.replaceChildren();
+    action(t.day===today()?'移出“我的一天”':'添加到“我的一天”','day','day','T');
+    action(t.star?'取消重要标记':'标记为重要','star','star');
+    action(t.done?'标记为未完成':'标记为已完成','done','done','D');
+    menu.append(el('hr'));
+    item('今天到期','today',()=>setDue(today()));
+    item('明天到期','tomorrow',()=>setDue(dates(1)));
+    item('选择日期','date',datePage);
+    menu.append(el('hr'));
+    const move=item('将任务移动到…','move',movePage,'›');move.setAttribute('aria-label','将任务移动到其他清单');
+    menu.append(el('hr'));
+    action('删除任务','trash','delete','Delete').classList.add('danger');
+    position();if(focus)menu.querySelector('button').focus();
+  }
+  menu.onkeydown=e=>{
+    if(e.isComposing)return;
+    if(page!=='actions'&&(e.key==='Escape'||(page==='lists'&&e.key==='ArrowLeft'))){
+      e.preventDefault();e.stopPropagation();main(true);return;
+    }
+    if(page==='date')return;
+    const shortcut=page==='actions'&&taskShortcut(e);
+    if(shortcut){e.preventDefault();e.stopPropagation();execute(()=>runTaskAction(t.id,shortcut));return}
+    if(e.key==='ArrowUp'||e.key==='ArrowDown'){
+      e.preventDefault();const buttons=[...menu.querySelectorAll('button:enabled')],i=buttons.indexOf(document.activeElement);
+      const next=e.key==='ArrowDown'?i+1:(i<0?buttons.length-1:i-1);
+      buttons[(next+buttons.length)%buttons.length]?.focus();
+    }else if(e.key==='ArrowRight'&&page==='actions'&&e.target.getAttribute('aria-label')==='将任务移动到其他清单'){
+      e.preventDefault();movePage();
+    }
+  };
+  menu.onclick=e=>{
+    if(e.target!==menu)return;
+    const r=menu.getBoundingClientRect();
+    if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)menu.close();
+  };
+  menu.showModal();main(false);menu.focus();
 }
 function row(t){
-  const a=el('article');a.classList.toggle('activeRow',editing?.id===t.id);
+  const a=el('article');a.dataset.taskId=t.id;a.classList.toggle('activeRow',editing?.id===t.id);
   const done=iconToggle(t.done?'恢复待办':'标记完成',t.done,'circle',()=>updateTask(t.id,{done:!t.done},t.done?'已恢复待办':'任务已完成'));
   const title=button('',()=>openTask(t));title.className='title';
   const name=el('span',t.title);if(t.done)name.className='checked';title.append(name);
   const sub=[(view==='list:'+t.list||view==='legacy')?'':listTitle(t.list),view!=='day'&&t.day===today()?'我的一天':'',t.due?'截止 '+dueName(t.due):'',t.steps.length?t.steps.filter(s=>s.done).length+'/'+t.steps.length+' 步':''].filter(Boolean);
   if(sub.length)title.append(el('small',sub.join(' · ')));
-  const more=button('⋯',e=>{const box=e.currentTarget.getBoundingClientRect();taskMenu(t,{x:box.left,y:box.bottom})});more.className='rowMore';more.setAttribute('aria-label','更多任务操作');more.title='更多任务操作';
-  a.oncontextmenu=e=>{e.preventDefault();taskMenu(t,{x:e.clientX,y:e.clientY})};
+  const more=button('⋯',e=>{const box=e.currentTarget.getBoundingClientRect();taskMenu(t,{x:box.left,y:box.bottom})});more.className='rowMore';more.setAttribute('aria-label','更多任务操作');more.title='更多任务操作';more.setAttribute('aria-haspopup','dialog');
+  a.oncontextmenu=e=>{
+    e.preventDefault();const r=a.getBoundingClientRect();
+    taskMenu(t,e.clientX||e.clientY?{x:e.clientX,y:e.clientY}:{x:r.left+24,y:r.top+20});
+  };
   a.append(done,title,more,iconToggle(t.star?'取消重要':'标为重要',t.star,'star',()=>updateTask(t.id,{star:!t.star})));return a;
 }
 function render(){
@@ -407,7 +506,7 @@ function mountEditor(record){
   const note=el('textarea');note.value=t.note;note.maxLength=16000;note.placeholder='添加备注';note.setAttribute('aria-label','添加备注');
   note.className='detailNote';note.oninput=()=>recordEdit(s,'note',note.value);host.append(note);
   const footer=el('div');footer.className='detailFoot';footer.append(el('small','创建于 '+new Date(t.created).toLocaleDateString('zh-CN')));
-  const del=button('删除任务',()=>{if(confirm('删除这条任务？'))updateTask(t.id,{deleted:true},'任务已删除')});del.className='danger';footer.append(del);host.append(footer);
+  const del=button('删除任务',()=>deleteTask(t.id));del.className='danger';footer.append(del);host.append(footer);
   s.recover.hidden=true;s.recover.append(button('重试保存',()=>queueEdit(s)),button('放弃草稿并刷新',async()=>{if(!confirm('放弃此任务的未保存修改并读取云端版本？'))return;closeDetail();await refresh();const r=records.get(taskKey(t.id));if(r&&!r.data.deleted)mountEditor(r);render()}));host.append(s.recover);
 }
 function lockControls(){document.querySelectorAll('#app button:not(#drawer),#detail input,#detail textarea,#detail select,#quick,#connect button,#listForm button').forEach(e=>e.disabled=busy)}
@@ -558,6 +657,9 @@ $('lookup').oninput=async()=>{
 $('lookup').onkeydown=e=>{if(e.key==='Enter')$('side').classList.remove('open')};
 document.addEventListener('keydown',async e=>{
   if(e.isComposing||document.querySelector('dialog[open]'))return;
+  const shortcut=taskShortcut(e);
+  const taskId=e.target.closest('article[data-task-id]')?.dataset.taskId||($('detail').contains(e.target)&&editing?.id);
+  if(shortcut&&taskId){e.preventDefault();runTaskAction(taskId,shortcut);return}
   if(e.key==='Escape'){
     if(!await finishEdit())return;
     if(!$('detail').hidden){closeDetail();render()}
@@ -574,7 +676,11 @@ function clearWorkspace(){
 }
 function disconnect(){if(editing)clearTimeout(editing.timer);epoch++;branch='';config=null;records.clear();clearWorkspace();sessionStorage.removeItem(key);localStorage.removeItem(key);$('token').value='';status('连接 GitHub');render()}
 $('forget').onclick=()=>{resumeNewList=false;disconnect();$('setup').close()};
-async function connect(c,remember){if(!await finishEdit())return;busy=true;epoch++;lockControls();records.clear();branch='';config=c;try{await verifyPrivate();records=await loadRecords();localStorage.setItem(key+':repo',c.repo);sessionStorage.removeItem(key);localStorage.removeItem(key);(remember?localStorage:sessionStorage).setItem(key,JSON.stringify(c));$('token').value='';$('setupError').textContent='';$('setup').close();clearWorkspace();render();status('已同步 · 刷新')}catch(e){disconnect();if(!$('setup').open)$('setup').showModal();$('setupError').textContent=e.message}finally{busy=false;lockControls()}if(config&&resumeNewList){resumeNewList=false;await newList()}}
+async function connect(c,remember,restoring=false){if(!await finishEdit())return;busy=true;epoch++;lockControls();records.clear();branch='';config=c;try{await verifyPrivate();records=await loadRecords();if(!restoring){
+  localStorage.setItem(key+':repo',c.repo);
+  const keep=remember?localStorage:sessionStorage,other=remember?sessionStorage:localStorage;
+  keep.setItem(key,JSON.stringify(c));other.removeItem(key);
+}$('token').value='';$('setupError').textContent='';$('setup').close();clearWorkspace();render();status('已同步 · 刷新')}catch(e){disconnect();if(!$('setup').open)$('setup').showModal();$('setupError').textContent=e.message}finally{busy=false;lockControls()}if(config&&resumeNewList){resumeNewList=false;await newList()}}
 $('connect').onsubmit=e=>{e.preventDefault();const repo=$('repo').value.trim(),token=$('token').value.trim();if(!/^[a-z\d-]+\/[\w.-]+$/i.test(repo)||!token){$('setupError').textContent='请填写用户名/仓库名及令牌。';return}connect({repo,token},$('remember').checked)};
-render();let saved;try{saved=JSON.parse(sessionStorage.getItem(key)||localStorage.getItem(key)||'null')}catch{}if(saved)connect(saved,!!localStorage.getItem(key));else status('连接 GitHub');setInterval(()=>{if(!document.hidden)refresh()},30000);window.addEventListener('focus',refresh);
+render();let saved;try{saved=JSON.parse(sessionStorage.getItem(key)||localStorage.getItem(key)||'null')}catch{}if(saved)connect(saved,false,true);else status('连接 GitHub');setInterval(()=>{if(!document.hidden)refresh()},30000);window.addEventListener('focus',refresh);
 </script></html>
