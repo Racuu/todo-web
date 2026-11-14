@@ -82,6 +82,34 @@ html,body{background:#f0f5ff;overscroll-behavior:none}
   .main{--list-safe-top:max(20px,env(safe-area-inset-top,0px))}
  }
 }
+/* Keep the return control outside the scrolling task content. */
+#detail.taskPanel{display:flex;flex-direction:column;overflow:hidden}
+#detail.taskPanel .editorHead{flex:none;min-height:44px}
+.editorHead .mobileBack{display:none}
+.editorBody{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:2px 4px 8px}
+.stepText{display:grid;flex:1;min-width:0}
+.stepText::after,.stepText textarea{grid-area:1/1;box-sizing:border-box;margin:0;padding:8px 6px;border:0;font:inherit;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.stepText::after{content:attr(data-text) " ";visibility:hidden}
+#detail .stepText textarea{min-height:0;height:100%;resize:none;overflow:hidden;background:transparent}
+.layerReturn{display:none}
+@media(min-width:751px){
+ #detail.taskPanel{width:43.5%;flex:none;padding:12px clamp(14px,1.6vw,28px)}
+}
+@media(min-width:751px) and (max-width:1030px){
+ #detail.taskPanel{position:absolute;inset:0 0 0 auto;z-index:3}
+}
+@media(max-width:750px){
+ #app{--layer-edge:clamp(16px,5vw,24px)}
+ #detail.taskPanel{inset-inline-start:var(--layer-edge);width:auto;padding:calc(16px + env(safe-area-inset-top,0px)) max(8px,env(safe-area-inset-right,0px)) max(8px,env(safe-area-inset-bottom,0px)) 8px;box-shadow:-4px 0 16px #17375e16}
+ #detail.taskPanel .editorHead{justify-content:space-between;min-height:48px;border-bottom:1px solid var(--line)}
+ .editorHead .mobileBack{display:inline-flex;align-items:center;gap:5px;width:auto;height:44px;padding:0 8px;color:var(--blue);font-size:16px;font-weight:600}
+ .editorHead .desktopClose{display:none}
+ .editorBody{padding:0 3px 10px;scrollbar-gutter:auto}
+ #detail .stepText{font-size:16px}
+ #app>.layerReturn{position:fixed;inset:0;display:block;padding:0;border:0;border-radius:0;background:#1b385623;z-index:3}
+ #app>.layerReturn[hidden]{display:none}
+ .side.open{width:min(320px,calc(100% - var(--layer-edge)));box-shadow:2px 0 12px #163d6420}
+}
 </style>
 <div id="app">
   <aside class="side" id="side">
@@ -92,13 +120,14 @@ html,body{background:#f0f5ff;overscroll-behavior:none}
     <nav id="lists" aria-label="我的清单"></nav>
     <footer><button id="backup">备份与恢复</button><button id="settings">同步设置</button></footer>
   </aside>
-  <main class="main"><div class="topbar"><button id="drawer" aria-label="打开清单">☰</button><span class="mobileBrand"><span class="mark" aria-hidden="true"></span>To Doo</span><button id="sync" aria-live="polite">连接 GitHub</button></div>
-    <div class="workspace"><header class="heading"><div><div id="groupPath" hidden></div><h1 id="heading">我的清单</h1><p id="stamp"></p></div><div class="headTools"><button hidden id="listOptions" aria-label="清单选项" aria-haspopup="dialog" title="清单选项">⋯</button><button id="suggest" aria-expanded="false" aria-label="我的一天建议"><svg class="navIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17h6m-5 4h4M8 14a6 6 0 1 1 8 0c-1 1-1.5 2-1.5 3h-5c0-1-.5-2-1.5-3Z"/></svg>建议</button></div></header>
+  <main class="main"><div class="topbar"><button id="drawer" aria-label="打开清单" aria-controls="side" aria-expanded="false">☰</button><span class="mobileBrand"><span class="mark" aria-hidden="true"></span>To Doo</span><button id="sync" aria-live="polite">连接 GitHub</button></div>
+    <div class="workspace"><header class="heading"><div><div id="groupPath" hidden></div><h1 id="heading" tabindex="-1">我的清单</h1><p id="stamp"></p></div><div class="headTools"><button hidden id="listOptions" aria-label="清单选项" aria-haspopup="dialog" title="清单选项">⋯</button><button id="suggest" aria-expanded="false" aria-label="我的一天建议"><svg class="navIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17h6m-5 4h4M8 14a6 6 0 1 1 8 0c-1 1-1.5 2-1.5 3h-5c0-1-.5-2-1.5-3Z"/></svg>建议</button></div></header>
     <section class="rows" id="rows" aria-label="任务列表"></section>
     <form class="add" id="add" hidden><span aria-hidden="true">＋</span><input id="quick" maxlength="500" aria-label="新任务" placeholder="添加一个任务…" required autocomplete="off"><button class="primary">添加</button></form>
     </div>
   </main>
-  <aside class="detail" id="detail" hidden></aside>
+  <button type="button" id="layerReturn" class="layerReturn" aria-label="返回清单" hidden></button>
+  <aside class="detail" id="detail" aria-label="任务详情" hidden></aside>
 </div>
 <div id="notice" role="status" hidden></div><dialog id="scheduleMenu"></dialog><dialog id="collectionMenu" tabindex="-1" aria-label="清单操作"></dialog><dialog id="rowMenu" tabindex="-1" aria-label="任务操作"></dialog><dialog id="archives"><h2>备份与恢复</h2><p class="muted">完整备份保留组、清单、任务、步骤和备注。CSV 可用 Excel 按组和清单筛选。</p>
 <div class="archiveActions"><button id="exportJson">下载完整备份 · JSON</button><button id="exportCsv">下载任务表 · CSV</button></div>
@@ -163,13 +192,31 @@ function suggestions(tasks){
   return tasks.filter(t=>!t.deleted&&!records.get(listKey(t.list))?.data.deleted&&!t.done&&t.day!==todayKey).sort((a,b)=>rank(a)-rank(b)||b.created-a.created);
 }
 function closeDetail(){
-  editing=null;showingPicks=false;$('detail').replaceChildren();$('detail').hidden=true;
+  editing=null;showingPicks=false;
+  const panel=$('detail');panel.replaceChildren();panel.hidden=true;panel.classList.remove('taskPanel');
+  updateLayerReturn();
+}
+function updateLayerReturn(){
+  $('layerReturn').hidden=$('detail').hidden&&!$('side').classList.contains('open');
+}
+function setDrawer(open){
+  $('side').classList.toggle('open',open);$('drawer').setAttribute('aria-expanded',String(open));updateLayerReturn();
+}
+async function returnToLayer(layer='list'){
+  const id=editing?.id;
+  if(!await finishEdit())return;
+  clearTimeout(editorPaint);
+  const top=$('rows').scrollTop;
+  closeDetail();setDrawer(layer==='navigation'&&matchMedia('(max-width:750px)').matches);render();$('rows').scrollTop=top;
+  const target=layer==='navigation'?$('side').querySelector('[aria-current="page"]')||$('lookup'):
+    (id&&[...$('rows').querySelectorAll('article')].find(row=>row.dataset.taskId===id)?.querySelector('.title'))||$('heading');
+  target.focus({preventScroll:true});
 }
 async function choose(id){
   if(!await finishEdit())return;
   if(id!=='search'){$('lookup').value='';filterText=''}
   visibleRowLimit=80;view=id;if(config&&activeListId()){localStorage.setItem(savedListKey(),activeListId());collapsedGroups.delete(records.get(listKey(activeListId())).data.group)}
-  closeDetail();$('side').classList.remove('open');$('rows').scrollTop=0;render();
+  closeDetail();setDrawer(false);$('rows').scrollTop=0;render();
 }
 function notifyAction(message,undo){
   clearTimeout(undoTimer);const bar=$('notice');bar.replaceChildren(el('span',message));
@@ -717,8 +764,8 @@ function render(){
   if(showingPicks)drawPicks();
 }
 function drawPicks(){
-  const host=$('detail');host.hidden=false;host.replaceChildren();
-  host.append(button('‹ 返回清单',()=>{closeDetail();render()}),el('h2','我的一天建议'));
+  const host=$('detail');host.hidden=false;host.replaceChildren();updateLayerReturn();
+  host.append(button('‹ 返回清单',()=>returnToLayer()),el('h2','我的一天建议'));
   const picks=suggestions(entries('tasks'));
   if(!picks.length)host.append(el('p',config?'暂无可加入的未完成任务。':'连接任务库后，这里会显示其他清单中的未完成任务。'));
   for(const t of picks){const line=el('div');line.className='pick';const label=el('div');label.append(el('strong',t.title),el('small',[listTitle(t.list),t.due&&'截止 '+dueName(t.due),t.star&&'重要'].filter(Boolean).join(' · ')));const add=button('＋',()=>updateTask(t.id,{day:today()},'已加入我的一天'));add.setAttribute('aria-label','加入我的一天：'+t.title);line.append(label,add);host.append(line)}
@@ -752,9 +799,14 @@ function recordEdit(s,key,value){
 async function openTask(t){if(!await finishEdit())return;const r=records.get(taskKey(t.id));if(!r||r.data.deleted)return;showingPicks=false;mountEditor(r);render()}
 function mountEditor(record){
   const t=record.data,s={id:t.id,base:t,dirty:false,patch:{},message:el('small',''),recover:el('div')};
-  editing=s;const host=$('detail');host.hidden=false;host.replaceChildren();
-  const back=button('×',async()=>{if(await finishEdit()){closeDetail();render()}});back.setAttribute('aria-label','关闭任务详情');back.title='关闭';
-  const head=el('div');head.className='editorHead';head.append(s.message,back);s.message.setAttribute('role','status');host.append(head);
+  const panel=$('detail'),sameTask=editing?.id===t.id;
+  const top=sameTask?panel.querySelector('.editorBody')?.scrollTop||0:0;
+  editing=s;panel.hidden=false;panel.classList.add('taskPanel');panel.replaceChildren();updateLayerReturn();
+  const leave=()=>returnToLayer();
+  const back=button('‹ 返回清单',leave);back.className='mobileBack';back.setAttribute('aria-label','返回清单');
+  const close=button('×',leave);close.className='desktopClose';close.setAttribute('aria-label','关闭任务详情');
+  const head=el('div');head.className='editorHead';s.message.setAttribute('role','status');head.append(back,s.message,close);
+  const host=el('div');host.className='editorBody';panel.append(head,host);
   const card=el('div');card.className='taskCard';const title=el('input');title.maxLength=500;title.value=t.title;title.setAttribute('aria-label','任务名称');
   title.oninput=()=>recordEdit(s,'title',title.value);title.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();queueEdit(s);title.blur()}};
   const done=iconToggle(t.done?'恢复待办':'标记完成',t.done,'circle',()=>updateTask(t.id,{done:!t.done},t.done?'已恢复待办':'任务已完成'));
@@ -772,10 +824,11 @@ function mountEditor(record){
     steps.replaceChildren();draftSteps.forEach((step,i)=>{
       const item=el('div');item.className='step';
       const check=el('input');check.type='checkbox';check.checked=step.done;check.setAttribute('aria-label','完成步骤 '+step.title);check.onchange=()=>{step.done=check.checked;saveSteps()};
-      const input=el('input');input.type='text';input.value=step.title;input.maxLength=500;input.setAttribute('aria-label','步骤名称');
-      input.oninput=()=>{if(input.value.trim()){step.title=input.value.trim();recordEdit(s,'steps',structuredClone(draftSteps))}};
-      input.onblur=()=>{input.value=step.title};input.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();queueEdit(s);next.focus()}};
-      const remove=button('×',()=>removeStep(i));remove.setAttribute('aria-label','移除步骤 '+step.title);item.append(check,input,remove);steps.append(item);
+      const field=el('div');field.className='stepText';field.dataset.text=step.title;
+      const input=el('textarea');input.rows=1;input.value=step.title;input.maxLength=500;input.setAttribute('aria-label','步骤名称');field.append(input);
+      input.oninput=()=>{field.dataset.text=input.value;if(input.value.trim()){step.title=input.value.trim();recordEdit(s,'steps',structuredClone(draftSteps))}};
+      input.onblur=()=>{input.value=step.title;field.dataset.text=step.title};input.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();queueEdit(s);next.focus()}};
+      const remove=button('×',()=>removeStep(i));remove.setAttribute('aria-label','移除步骤 '+step.title);item.append(check,field,remove);steps.append(item);
     });
   }
   const next=el('input');next.placeholder='添加步骤';next.maxLength=500;next.setAttribute('aria-label','添加步骤');
@@ -822,7 +875,7 @@ function mountEditor(record){
   host.append(tools,note,grip);
   const footer=el('div');footer.className='detailFoot';footer.append(el('small','创建于 '+new Date(t.created).toLocaleDateString('zh-CN')));
   const del=button('删除任务',()=>deleteTask(t.id));del.className='danger';footer.append(del);host.append(footer);
-  s.recover.hidden=true;s.recover.append(button('重试保存',()=>queueEdit(s)),button('放弃草稿并刷新',async()=>{if(!confirm('放弃此任务的未保存修改并读取云端版本？'))return;closeDetail();await refresh();const r=records.get(taskKey(t.id));if(r&&!r.data.deleted)mountEditor(r);render()}));host.append(s.recover);
+  s.recover.hidden=true;s.recover.append(button('重试保存',()=>queueEdit(s)),button('放弃草稿并刷新',async()=>{if(!confirm('放弃此任务的未保存修改并读取云端版本？'))return;closeDetail();await refresh();const r=records.get(taskKey(t.id));if(r&&!r.data.deleted)mountEditor(r);render()}));host.append(s.recover);host.scrollTop=top;
 }
 function lockControls(){document.querySelectorAll('#app button:not(#drawer),#detail input,#detail textarea,#detail select,#quick,#connect button,#listForm button').forEach(e=>e.disabled=busy)}
 async function githubError(response){
@@ -1317,7 +1370,7 @@ async function restoreMissing(){
   }catch(e){archiveMessage('请刷新后核对目标仓库，再重试。'+e.message)}
   finally{busy=false;archiveBusy=false;lockControls();$('restore').disabled=false}
 }
-$('backup').onclick=()=>{$('side').classList.remove('open');$('archives').showModal()};
+$('backup').onclick=()=>{setDrawer(false);$('archives').showModal()};
 $('closeArchive').onclick=()=>$('archives').close();
 $('exportJson').onclick=()=>exportFile(false);$('exportCsv').onclick=()=>exportFile(true);
 $('previewFile').onclick=inspectFile;$('restore').onclick=restoreMissing;
@@ -1330,7 +1383,17 @@ $('importFile').onchange=async e=>{
   }catch(error){$('importInfo').textContent=error.message}
 };
 
-$('hideMenu').onclick=()=>$('side').classList.remove('open');
+$('hideMenu').onclick=()=>{setDrawer(false);$('drawer').focus({preventScroll:true})};
+$('layerReturn').onclick=()=>{
+  if(!$('detail').hidden)returnToLayer();
+  else{setDrawer(false);$('drawer').focus({preventScroll:true})}
+};
+$('app').addEventListener('click',e=>{
+  if($('detail').hidden||e.defaultPrevented||document.querySelector('dialog[open]'))return;
+  if(e.target.closest('button,a,input,textarea,select,label,form,summary,article,[contenteditable],#detail'))return;
+  if(e.target.closest('.main'))returnToLayer();
+  else if(e.target.closest('#side'))returnToLayer('navigation');
+});
 $('add').onsubmit=async e=>{
   e.preventDefault();
   const list=activeListId(),title=$('quick').value.trim();
@@ -1354,7 +1417,7 @@ $('lookup').oninput=async()=>{
   const q=$('lookup').value.trim();if(view!=='search')previousView=view;
   closeDetail();filterText=q;view=q?'search':previousView;render();
 };
-$('lookup').onkeydown=e=>{if(e.key==='Enter')$('side').classList.remove('open')};
+$('lookup').onkeydown=e=>{if(e.key==='Enter')setDrawer(false)};
 document.addEventListener('keydown',async e=>{
   if(e.isComposing||document.querySelector('dialog[open]'))return;
   const shortcut=taskShortcut(e);
@@ -1362,13 +1425,13 @@ document.addEventListener('keydown',async e=>{
   if(shortcut&&taskId){e.preventDefault();runTaskAction(taskId,shortcut);return}
   if(e.key==='Escape'){
     if(!await finishEdit())return;
-    if(!$('detail').hidden){closeDetail();render()}
+    if(!$('detail').hidden){await returnToLayer()}
     else if(view==='search')choose(previousView);
-    else $('side').classList.remove('open');
+    else setDrawer(false);
   }
 });
 window.addEventListener('beforeunload',e=>{if(editing?.dirty){e.preventDefault();e.returnValue=''}});
-$('settings').onclick=showSetup;$('drawer').onclick=()=>$('side').classList.toggle('open');$('sync').onclick=syncNow;$('dismiss').onclick=()=>{resumeNewList=false;$('setup').close()};
+$('settings').onclick=showSetup;$('drawer').onclick=()=>setDrawer(!$('side').classList.contains('open'));$('sync').onclick=syncNow;$('dismiss').onclick=()=>{resumeNewList=false;$('setup').close()};
 $('setup').addEventListener('cancel',()=>{resumeNewList=false});
 function clearWorkspace(){
   collapsedGroups.clear();pendingAdd=null;draftList='';taskDrafts.clear();$('quick').value='';
