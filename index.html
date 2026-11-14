@@ -712,29 +712,10 @@ function mountEditor(record){
   const steps=el('div'),draftSteps=structuredClone(t.steps);
   function saveSteps(){recordEdit(s,'steps',structuredClone(draftSteps),true)}
   function removeStep(index){
-    const [removed]=draftSteps.splice(index,1);
-    const remaining=JSON.stringify(draftSteps);
-    const repo=config.repo;
+    if(!confirm('删除步骤「'+draftSteps[index].title+'」？'))return;
+    draftSteps.splice(index,1);
     drawSteps();
     saveSteps();
-    notifyAction('已删除步骤',async()=>{
-      if(config?.repo!==repo)return;
-      if(editing===s){
-        draftSteps.splice(index,0,removed);
-        drawSteps();
-        saveSteps();
-        return;
-      }
-      if(!await finishEdit())return;
-      const current=records.get(taskKey(t.id))?.data;
-      if(!current||current.deleted||JSON.stringify(current.steps)!==remaining){
-        notifyAction('步骤已变更，无法撤销');
-        return;
-      }
-      const restored=current.steps.slice();
-      restored.splice(index,0,removed);
-      await updateTask(t.id,{steps:restored});
-    });
   }
   function drawSteps(){
     steps.replaceChildren();draftSteps.forEach((step,i)=>{
