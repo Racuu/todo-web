@@ -39,30 +39,52 @@
 #scheduleMenu::backdrop{background:transparent}#scheduleMenu button{display:flex;width:100%;align-items:center;text-align:left;min-height:41px;padding:9px 13px}
 #scheduleMenu small{margin-left:auto;color:var(--dim);font-size:13px}#scheduleMenu .divider{border-top:1px solid var(--line);border-radius:0}#scheduleMenu button[aria-pressed=true]{color:var(--blue);background:var(--pale)}#scheduleMenu form{padding:8px}
 .blank .primary{margin-top:18px;padding:8px 22px}#rows>.primary{margin-bottom:12px}
+.listLabel>span:first-child{margin-right:auto}.listLabel{justify-content:flex-start;gap:4px}.listLabel button{width:31px;height:31px;display:grid;place-items:center}.listLabel .navIcon{width:19px;height:19px}
+#lists .sideRow{display:flex;align-items:center;min-width:0;border-radius:5px}#lists .sideRow>button:first-child{flex:1;min-width:0;gap:8px}
+#lists .sideRow .sideMore{width:30px;min-height:32px;display:grid;place-items:center;padding:0;flex:none;color:#547098;opacity:0}
+#lists .sideRow:hover,#lists .sideRow:focus-within{background:#eef4ff}
+#lists .sideRow:hover>.sideMore,#lists .sideRow:focus-within>.sideMore{opacity:1}
+#lists .sideRow:has(.selected){background:#dfebff}.groupChildren{display:grid;gap:2px;margin-left:16px;border-left:1px solid #d4dfef;padding-left:5px}
+#lists .groupRow>button:first-child{font-weight:600;padding-left:5px}.groupArrow{width:7px;height:7px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(-45deg);margin:0 1px}
+[aria-expanded=true]>.groupArrow{transform:rotate(45deg)}#lists .inGroupAdd{font-size:14px;color:var(--blue)}
+#groupPath{font-size:13px;color:var(--dim);margin-bottom:3px}.headTools #listOptions{min-width:37px;min-height:34px;justify-content:center}
+@media(hover:none),(max-width:750px){#lists .sideRow .sideMore{opacity:1}}
+#collectionMenu{position:fixed;inset:auto;margin:0;max-height:calc(100dvh - 16px);width:min(258px,calc(100vw - 16px));padding:5px;border-radius:8px;box-shadow:0 8px 30px #18345a2b;border:1px solid #ccd9eb;overflow:auto;background:#fff}
+#collectionMenu::backdrop{background:transparent}#collectionMenu:focus{outline:none}
+#collectionMenu.withSub{width:min(512px,calc(100vw - 16px))}#collectionMenu.withSub[open]{display:grid;grid-template-columns:1fr 1fr;align-items:start}
+#collectionMenu .subPage{border-left:1px solid var(--line);padding-left:5px}#collectionMenu.withSub .menuPage:first-child{padding-right:5px}
+#collectionMenu .submenuBack{display:none}#collectionMenu hr{margin:4px 0}#collectionMenu .navIcon{width:19px;height:19px;color:#526e92;flex:none}
+#collectionMenu .danger,#collectionMenu .danger .navIcon{color:#bc3337}#collectionMenu small{margin-left:auto;color:var(--dim)}#collectionMenu .subPage p{padding:9px}
+#rowMenu,#collectionMenu{--menu-size:15px;font-size:var(--menu-size)}
+#rowMenu .scheduleAction,#collectionMenu .scheduleAction{font:inherit;line-height:1.45;font-weight:400;min-height:41px;gap:12px;padding:8px 11px;border-radius:4px}
+#rowMenu small,#collectionMenu small,#rowMenu .menuHint,#rowMenu .customDate :is(button,input,label){font-family:inherit;font-weight:400;font-size:var(--menu-size)}
+#collectionMenu .scheduleAction[aria-pressed=true]{background:#ebf2ff}
+@media(max-width:570px){#collectionMenu.withSub{width:min(258px,calc(100vw - 16px))}#collectionMenu.withSub[open]{display:block}#collectionMenu.withSub .menuPage:first-child{display:none}#collectionMenu .subPage{border:0;padding:0}#collectionMenu .submenuBack{display:flex;border-bottom:1px solid var(--line);border-radius:0}}
+@media(pointer:coarse){#collectionMenu .scheduleAction,#rowMenu .scheduleAction{min-height:45px}}
 </style>
 <div id="app">
   <aside class="side" id="side">
     <div class="brand"><span class="mark" aria-hidden="true"></span>To Doo<button id="hideMenu" aria-label="关闭清单">×</button></div>
     <input type="search" id="lookup" placeholder="搜索任务" aria-label="搜索任务">
     <nav id="smart" aria-label="任务视图"></nav>
-    <div class="listLabel"><span>我的清单</span><button id="newList" aria-label="新建清单" title="新建清单">＋</button></div>
+    <div class="listLabel"><span>我的清单</span><button id="newGroup" aria-label="新建组" title="新建组"><svg class="navIcon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v12H3z M9 14h6m-3-3v6"/></svg></button><button id="newList" aria-label="新建清单" title="新建清单">＋</button></div>
     <nav id="lists" aria-label="我的清单"></nav>
     <footer><button id="backup">备份与恢复</button><button id="settings">同步设置</button></footer>
   </aside>
   <main class="main"><div class="topbar"><button id="drawer" aria-label="打开清单">☰</button><span class="mobileBrand"><span class="mark" aria-hidden="true"></span>To Doo</span><button id="sync" aria-live="polite">连接 GitHub</button></div>
-    <div class="workspace"><header class="heading"><div><h1 id="heading">我的清单</h1><p id="stamp"></p></div><div class="headTools"><button id="suggest" aria-expanded="false" aria-label="我的一天建议"><svg class="navIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17h6m-5 4h4M8 14a6 6 0 1 1 8 0c-1 1-1.5 2-1.5 3h-5c0-1-.5-2-1.5-3Z"/></svg>建议</button></div></header>
+    <div class="workspace"><header class="heading"><div><div id="groupPath" hidden></div><h1 id="heading">我的清单</h1><p id="stamp"></p></div><div class="headTools"><button hidden id="listOptions" aria-label="清单选项" aria-haspopup="dialog" title="清单选项">⋯</button><button id="suggest" aria-expanded="false" aria-label="我的一天建议"><svg class="navIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17h6m-5 4h4M8 14a6 6 0 1 1 8 0c-1 1-1.5 2-1.5 3h-5c0-1-.5-2-1.5-3Z"/></svg>建议</button></div></header>
     <section class="rows" id="rows" aria-label="任务列表"></section>
     <form class="add" id="add" hidden><span aria-hidden="true">＋</span><input id="quick" maxlength="500" aria-label="新任务" placeholder="添加一个任务…" required autocomplete="off"><button class="primary">添加</button></form>
     </div>
   </main>
   <aside class="detail" id="detail" hidden></aside>
 </div>
-<div id="notice" role="status" hidden></div><dialog id="scheduleMenu"></dialog><dialog id="rowMenu" tabindex="-1" aria-label="任务操作"></dialog><dialog id="archives"><h2>备份与恢复</h2><p class="muted">完整备份保留清单、任务、步骤和备注。CSV 可用 Excel 或其他表格工具按清单筛选。</p>
+<div id="notice" role="status" hidden></div><dialog id="scheduleMenu"></dialog><dialog id="collectionMenu" tabindex="-1" aria-label="清单操作"></dialog><dialog id="rowMenu" tabindex="-1" aria-label="任务操作"></dialog><dialog id="archives"><h2>备份与恢复</h2><p class="muted">完整备份保留组、清单、任务、步骤和备注。CSV 可用 Excel 按组和清单筛选。</p>
 <div class="archiveActions"><button id="exportJson">下载完整备份 · JSON</button><button id="exportCsv">下载任务表 · CSV</button></div>
 <hr><label>打开完整备份<input id="importFile" type="file" accept=".json,application/json"></label><p id="importInfo" role="status" class="muted"></p><button id="previewFile" hidden>浏览备份</button><label id="restoreMode" hidden><input id="replaceChanged" type="checkbox"> 用备份版本替换同编号但内容不同的记录</label><button id="restore" class="primary" hidden>恢复到私有任务库</button>
 <div id="backupView"></div><p id="restoreReport" role="status"></p><div class="actions"><button id="closeArchive">关闭</button></div></dialog>
 <dialog id="setup"><h2>连接私有任务库</h2><p class="muted">手机和电脑填写同一个私有仓库。令牌仅用于访问 GitHub。</p><form id="connect"><label>GitHub 用户名 / 仓库名<input id="repo" placeholder="你的用户名/todo-data" required autocomplete="off"></label><label>共用的细粒度令牌<input type="password" id="token" required autocomplete="off"></label><label><input type="checkbox" id="remember" aria-describedby="rememberHint"> 在这台私人设备上记住令牌</label><p class="muted" id="rememberHint">不勾选也能同步。刷新这个标签页无需重填，关闭后重新打开通常需要再输入令牌。</p><p id="setupError" class="error" role="alert"></p><div class="actions"><button class="primary">连接</button><button type="button" id="dismiss">关闭</button><button type="button" id="forget">断开此设备</button></div></form></dialog>
-<dialog id="listBox"><h2>新建清单</h2><form id="listForm"><label>清单名称<input id="listName" required maxlength="60"></label><button class="primary">创建</button><button type="button" id="cancelList">取消</button></form></dialog>
+<dialog id="listBox"><h2 id="nameHeading">新建清单</h2><form id="listForm"><label><span id="nameLabel">清单名称</span><input id="listName" required maxlength="60"></label><button class="primary" id="nameSave">创建</button><button type="button" id="cancelList">取消</button></form></dialog>
 <script>
 'use strict';
 const $=id=>document.getElementById(id), el=(tag,txt)=>{const e=document.createElement(tag);if(txt!==undefined)e.textContent=txt;return e};
@@ -70,12 +92,12 @@ const button=(txt,action)=>{const b=el('button',txt);b.type='button';b.onclick=a
 const smart=[['day','☼','我的一天'],['star','☆','重要'],['plan','▦','计划内']];
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 const key='zhuri:'+location.pathname;let pendingAdd=null;let config=null, branch='', records=new Map(),view='home',editing=null,busy=false,refreshing=false,epoch=0;
-const listKey=id=>'lists/'+id+'.json',taskKey=id=>'tasks/'+id+'.json';
+const groupKey=id=>'groups/'+id+'.json',listKey=id=>'lists/'+id+'.json',taskKey=id=>'tasks/'+id+'.json';
 const entries=kind=>[...records].filter(([p])=>p.startsWith(kind+'/')).map(([,v])=>v.data);
 const listTitle=id=>records.get(listKey(id))?.data.name||'待归类';
-const sortedLists=()=>entries('lists').sort((a,b)=>a.name.localeCompare(b.name,'zh-CN')||a.id.localeCompare(b.id));
+const sortedLists=()=>entries('lists').filter(l=>!l.deleted).sort(nameCompare);
 const savedListKey=()=>key+':last-list:'+config.repo.toLowerCase();
-const activeListId=()=>view.startsWith('list:')&&records.has(listKey(view.slice(5)))?view.slice(5):'';
+const activeListId=()=>view.startsWith('list:')&&records.has(listKey(view.slice(5)))&&!records.get(listKey(view.slice(5))).data.deleted?view.slice(5):'';
 function defaultView(lists){
   const remembered=config&&localStorage.getItem(savedListKey());
   const preferred=lists.find(l=>l.id===remembered)||lists[0];
@@ -110,14 +132,14 @@ function dates(offset=0){
 }
 function dueName(d){return d===today()?'今天':d===dates(1)?'明天':d}
 function inView(t,id){
-  if(t.deleted)return false;
+  if(t.deleted||records.get(listKey(t.list))?.data.deleted)return false;
   if(id==='search'){const q=filterText.trim().toLocaleLowerCase();return q&&[t.title,t.note,listTitle(t.list),...t.steps.map(s=>s.title)].some(x=>x.toLocaleLowerCase().includes(q))}
   return id==='day'&&t.day===today()||id==='star'&&t.star||id==='plan'&&!!t.due||id==='legacy'&&!t.list||id==='list:'+t.list;
 }
 function suggestions(tasks){
   const todayKey=today();
   const rank=t=>t.due&&t.due<=todayKey?0:t.day&&t.day<todayKey?1:t.star?2:3;
-  return tasks.filter(t=>!t.deleted&&!t.done&&t.day!==todayKey).sort((a,b)=>rank(a)-rank(b)||b.created-a.created);
+  return tasks.filter(t=>!t.deleted&&!records.get(listKey(t.list))?.data.deleted&&!t.done&&t.day!==todayKey).sort((a,b)=>rank(a)-rank(b)||b.created-a.created);
 }
 function closeDetail(){
   editing=null;showingPicks=false;$('detail').replaceChildren();$('detail').hidden=true;
@@ -125,7 +147,7 @@ function closeDetail(){
 async function choose(id){
   if(!await finishEdit())return;
   if(id!=='search'){$('lookup').value='';filterText=''}
-  view=id;if(config&&activeListId())localStorage.setItem(savedListKey(),activeListId());
+  view=id;if(config&&activeListId()){localStorage.setItem(savedListKey(),activeListId());collapsedGroups.delete(records.get(listKey(activeListId())).data.group)}
   closeDetail();$('side').classList.remove('open');$('rows').scrollTop=0;render();
 }
 function notifyAction(message,undo){
@@ -177,7 +199,7 @@ function nextDue(task,base=today()){
   return next;
 }
 // One fast-forward commit keeps the completed occurrence and the next due task together.
-async function commitChanges(changes,message){
+async function commitChanges(changes,message,scope,parents=[]){
   await verifyPrivate();
   const ref='/git/ref/heads/'+branch.split('/').map(encodeURIComponent).join('/');
   const head=(await api(ref)).object.sha,base=(await api('/git/commits/'+head)).tree.sha;
@@ -185,6 +207,15 @@ async function commitChanges(changes,message){
   if(snapshot.truncated)throw Error('任务库太大，无法确认版本。');
   const versions=new Map(snapshot.tree.map(item=>[item.path,item.sha]));
   for(const item of changes)if(versions.get(item.path)!==item.expected)throw Error('任务已更新，请刷新后再试。');
+  for(const p of parents){
+    const r=records.get(p);
+    if(!r||r.data.deleted||r.sha!==versions.get(p))throw Error('目标组或清单已改变，请刷新后重试。');
+  }
+  if(scope){
+    const remote=await loadRecords(base);
+    const sameMembers=(map,other)=>[...map].every(([p,r])=>!scope(p,r.data)||other.get(p)?.sha===r.sha);
+    if(!sameMembers(remote,records)||!sameMembers(records,remote))throw Error('组或清单的内容已改变，请刷新后重试。');
+  }
   const post=(path,body,method='POST')=>api(path,{method,body:JSON.stringify(body)});
   const tree=await post('/git/trees',{base_tree:base,tree:changes.map(item=>({path:item.path,mode:'100644',type:'blob',content:JSON.stringify(item.data,null,2)}))});
   const commit=await post('/git/commits',{tree:tree.sha,parents:[head],message});
@@ -208,6 +239,9 @@ async function completeRepeating(record){
   }));
 }
 const uiIcons={
+ folder:'M3 6h7l2 3h9v11H3z',plus:'M12 4v16M4 12h16',rename:'M3 6h7m4 0h7v12h-7m-4 0H3V6 M10 3h4m-2 0v18m-2 0h4',
+ copy:'M8 7h12v14H8z M5 17H3V3h12v2',ungroup:'M8 4H4v4m0 3v3m0 3v3h4m3 0h3m3 0h3v-4m0-3v-3m0-3V4h-4m-3 0h-3',
+ sort:'M7 4v15m-4-4 4 4 4-4m6 5V5m-4 4 4-4 4 4',
  star:glyphs.star,list:glyphs.list,
  done:'M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0 M7.5 12l3 3 6-6',
  move:'M10 3v9m-3-3 3 3 3-3M3 15h3v3H3z M9 16.5h12 M3 21h3m3 0h12',
@@ -304,15 +338,8 @@ function taskMenu(t,anchor){
   if(busy)return;
   const menu=$('rowMenu');
   let page='actions';
-  function position(){
-    menu.style.left=Math.max(8,Math.min(innerWidth-menu.offsetWidth-8,anchor.x))+'px';
-    menu.style.top=Math.max(8,Math.min(innerHeight-menu.offsetHeight-8,anchor.y))+'px';
-  }
-  function item(label,icon,onClick,hint){
-    const b=actionButton(label,icon,onClick);
-    if(hint){const k=el('small',hint);k.setAttribute('aria-hidden','true');b.append(k)}
-    menu.append(b);return b;
-  }
+  const position=()=>positionMenu(menu,anchor);
+  const item=(label,icon,fn,hint)=>menuItem(menu,label,icon,fn,hint);
   function execute(fn){menu.close();return fn()}
   function action(label,icon,key,hint){
     return item(label,icon,()=>execute(()=>runTaskAction(t.id,key)),hint);
@@ -326,7 +353,7 @@ function taskMenu(t,anchor){
     menu.append(el('hr'));
     const lists=sortedLists();
     for(const l of lists){
-      const b=item(l.name,'list',()=>execute(()=>updateTask(t.id,{list:l.id},'已移动任务')));
+      const b=item(groupedName(l),'list',()=>execute(()=>updateTask(t.id,{list:l.id},'已移动任务')));
       if(l.id===t.list){b.disabled=true;b.append(el('small','当前清单'))}
     }
     if(!lists.some(l=>l.id!==t.list)){const help=el('p','请先在侧栏新建目标清单。');help.className='menuHint';menu.append(help)}
@@ -368,13 +395,217 @@ function taskMenu(t,anchor){
       e.preventDefault();movePage();
     }
   };
-  menu.onclick=e=>{
-    if(e.target!==menu)return;
-    const r=menu.getBoundingClientRect();
-    if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)menu.close();
-  };
+  menu.onclick=e=>dismissOutside(menu,e);
   menu.showModal();main(false);menu.focus();
 }
+const sortLabels={star:'重要性',due:'到期日期',day:'已添加到“我的一天”',name:'字母顺序',created:'创建日期'};
+const nameCompare=(a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true})||a.id.localeCompare(b.id);
+const sortedGroups=()=>entries('groups').filter(g=>!g.deleted).sort(nameCompare);
+const collapsedGroups=new Set();
+function compareTasks(mode){
+  const day=today();
+  return (a,b)=>{
+    let n=0;
+    if(mode==='star')n=Number(b.star)-Number(a.star);
+    if(mode==='due')n=(a.due||'9999-99-99').localeCompare(b.due||'9999-99-99');
+    if(mode==='day')n=Number(b.day===day)-Number(a.day===day);
+    if(mode==='name')n=a.title.localeCompare(b.title,'zh-CN',{numeric:true});
+    return n||b.created-a.created||a.id.localeCompare(b.id);
+  };
+}
+function recordChange(path,data){
+  return {path,data,expected:records.get(path)?.sha};
+}
+function groupedName(l,map=records){
+  const group=map.get(groupKey(l.group))?.data;
+  return group&&!group.deleted?group.name+' / '+l.name:l.name;
+}
+function listHierarchy(host,lists,addNav){
+  const groups=sortedGroups(),knownGroups=new Set(groups.map(g=>g.id));
+  function toolsFor(row,kind,data){
+    const open=point=>collectionMenu(kind,data.id,point);
+    const more=button('⋯',e=>open(menuPoint(e.currentTarget)));
+    more.className='sideMore';more.title='更多操作';more.setAttribute('aria-label',data.name+'的'+(kind==='group'?'组':'清单')+'操作');more.setAttribute('aria-haspopup','dialog');
+    row.append(more);
+    row.oncontextmenu=e=>{e.preventDefault();open(e.clientX||e.clientY?{x:e.clientX,y:e.clientY}:menuPoint(row))};
+    row.onkeydown=e=>{
+      if(e.key==='F2'){e.preventDefault();nameDialog(kind,data.id);return}
+      if(e.key==='Delete'&&kind==='list'){e.preventDefault();removeList(data.id)}
+      if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){e.preventDefault();open(menuPoint(row))}
+    };
+  }
+  function listRow(parent,l){
+    const r=el('div');r.className='sideRow';addNav(r,'list:'+l.id,l.name);
+    toolsFor(r,'list',l);parent.append(r);
+  }
+  for(const g of groups){
+    const wrap=el('section'),row=el('div'),children=el('div');
+    wrap.className='listGroup';row.className='sideRow groupRow';children.className='groupChildren';
+    const members=lists.filter(l=>l.group===g.id);
+    const toggle=button('',()=>{
+      if(collapsedGroups.has(g.id))collapsedGroups.delete(g.id);else collapsedGroups.add(g.id);
+      syncGroup();
+    });
+    const arrow=el('span');arrow.className='groupArrow';arrow.setAttribute('aria-hidden','true');
+    function syncGroup(){const expanded=!collapsedGroups.has(g.id);toggle.setAttribute('aria-expanded',String(expanded));children.hidden=!expanded}
+    toggle.append(arrow,makeIcon('folder'),el('span',g.name));row.append(toggle);toolsFor(row,'group',g);
+    members.forEach(l=>listRow(children,l));
+    if(!members.length){const add=button('＋ 新建清单',()=>nameDialog('list','',g.id));add.className='inGroupAdd';children.append(add)}
+    syncGroup();wrap.append(row,children);host.append(wrap);
+  }
+  lists.filter(l=>!knownGroups.has(l.group)).forEach(l=>listRow(host,l));
+}
+function menuPoint(anchor){const r=anchor.getBoundingClientRect();return{x:r.left,y:r.bottom+3}}
+function positionMenu(menu,point){
+  menu.style.left=Math.max(8,Math.min(innerWidth-menu.offsetWidth-8,point.x))+'px';
+  menu.style.top=Math.max(8,Math.min(innerHeight-menu.offsetHeight-8,point.y))+'px';
+}
+function dismissOutside(menu,e){
+  if(e.target!==menu)return;
+  const r=menu.getBoundingClientRect();
+  if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)menu.close();
+}
+function menuItem(parent,label,icon,action,hint){
+  const b=actionButton(label,icon,action);
+  if(hint){const k=el('small',hint);k.setAttribute('aria-hidden','true');b.append(k)}
+  parent.append(b);return b;
+}
+let nameRequest=null;
+async function nameDialog(kind,id='',group=''){
+  if(busy||!await finishEdit())return;
+  if(!config){resumeNewList={kind,id,group};showSetup();return}
+  const path=kind==='group'?groupKey(id):listKey(id),record=id?records.get(path):null;
+  if(id&&(!record||record.data.deleted))return;
+  const noun=kind==='group'?'组':'清单';
+  nameRequest={kind,id,group,expected:record?.sha,newId:crypto.randomUUID()};
+  $('nameHeading').textContent=(id?'重命名':'新建')+noun;$('nameLabel').textContent=noun+'名称';
+  $('nameSave').textContent=id?'保存':'创建';$('listName').value=record?.data.name||'';
+  $('listBox').showModal();$('listName').focus();$('listName').select();
+}
+async function saveName(e){
+  e.preventDefault();const req=nameRequest,name=$('listName').value.trim();
+  if(!req||!name||busy)return;
+  const {kind,id,group,newId,expected}=req,pk=kind==='group'?groupKey:listKey;
+  const path=pk(id||newId);
+  await change(async()=>{
+    const existing=records.get(path);
+    if(id&&(!existing||existing.data.deleted||existing.sha!==expected))throw Error('名称已在另一台设备上修改，请刷新后重试。');
+    const data=id?{...existing.data,name}:{id:newId,name,...(group?{group}:{})};
+    await storeFile(path,data,expected);$('listBox').close();
+    if(group)collapsedGroups.delete(group);
+    if(!id&&kind==='list')await choose('list:'+newId);
+    if(!id&&kind==='group')notifyAction('已创建组「'+name+'」');
+  });
+  if(!id&&kind==='list'&&activeListId()===newId)$('quick').focus();
+}
+async function editList(id,patch){
+  if(!await finishEdit())return;
+  await change(async()=>{
+    const path=listKey(id),r=records.get(path);if(!r||r.data.deleted)return;
+    await storeFile(path,{...r.data,...patch},r.sha);if(patch.group)collapsedGroups.delete(patch.group);
+  });
+}
+async function ungroup(id){
+  const g=records.get(groupKey(id))?.data;
+  if(!g||g.deleted||!confirm('取消「'+g.name+'」的分组？组内清单和任务会保留在侧栏。')||!await finishEdit())return;
+  await change(async()=>{
+    const changes=sortedLists().filter(l=>l.group===id).map(l=>recordChange(listKey(l.id),{...l,group:''}));
+    changes.push(recordChange(groupKey(id),{...g,deleted:true}));
+    await commitChanges(changes,'取消清单分组',(p,d)=>p.startsWith('lists/')&&!d.deleted&&d.group===id);
+  });
+}
+async function copyList(id){
+  if(!await finishEdit())return;
+  await change(async()=>{
+    const source=records.get(listKey(id))?.data;if(!source||source.deleted)return;
+    const allNames=new Set(sortedLists().map(l=>l.name));
+    let name=source.name+'（副本）',i=2;while(allNames.has(name))name=source.name+'（副本 '+i+++'）';
+    const copy={...source,id:crypto.randomUUID(),name};
+    const changes=[recordChange(listKey(copy.id),copy)];
+    for(const t of entries('tasks').filter(t=>!t.deleted&&t.list===id)){
+      const clone={...t,id:crypto.randomUUID(),list:copy.id};
+      changes.push(recordChange(taskKey(clone.id),clone));
+    }
+    await commitChanges(changes,'复制清单和任务',(p,d)=>p.startsWith('tasks/')&&!d.deleted&&d.list===id,[listKey(id),...(copy.group?[groupKey(copy.group)]:[])]);
+    collapsedGroups.delete(copy.group);await choose('list:'+copy.id);
+  });
+}
+async function removeList(id){
+  const l=records.get(listKey(id))?.data;if(!l||l.deleted||!await finishEdit())return;
+  const tasks=entries('tasks').filter(t=>t.list===id&&!t.deleted);
+  if(!confirm('删除「'+l.name+'」及其中的 '+tasks.length+' 条任务？'))return;
+  await change(async()=>{
+    const original=[l,...tasks],paths=[listKey(id),...tasks.map(t=>taskKey(t.id))];
+    await commitChanges(original.map((d,i)=>recordChange(paths[i],{...d,deleted:true})),'删除清单及其中的任务',(p,d)=>p.startsWith('tasks/')&&!d.deleted&&d.list===id);
+    const revisions=paths.map(p=>records.get(p).sha);
+    if(editing&&tasks.some(t=>t.id===editing.id))closeDetail();
+    notifyAction('已删除清单「'+l.name+'」',()=>change(async()=>{
+      await commitChanges(original.map((data,i)=>({path:paths[i],data,expected:revisions[i]})),'撤销删除清单');
+      collapsedGroups.delete(l.group);await choose('list:'+id);
+    }));
+  });
+}
+function collectionMenu(kind,id,point,header=false){
+  if(busy)return;
+  const isGroup=kind==='group',rec=records.get(isGroup?groupKey(id):listKey(id))?.data;
+  if(!rec||rec.deleted)return;
+  const menu=$('collectionMenu'),main=el('div'),sub=el('div');
+  main.className='menuPage';sub.className='menuPage subPage';sub.hidden=true;
+  menu.replaceChildren(main,sub);menu.classList.remove('withSub');menu.setAttribute('aria-label',isGroup?'组操作':'清单操作');
+  function execute(fn){menu.close();return fn()}
+  function item(label,icon,fn,hint){return menuItem(main,label,icon,()=>execute(fn),hint)}
+  let opener;
+  function back(){menu.classList.remove('withSub');sub.hidden=true;sub.replaceChildren();positionMenu(menu,point);opener?.focus()}
+  function section(title,icon,fill){
+    const b=menuItem(main,title,icon,()=>{
+      opener=b;sub.hidden=false;sub.replaceChildren();
+      const ret=menuItem(sub,'返回','back',back);ret.classList.add('submenuBack');
+      fill();menu.classList.add('withSub');positionMenu(menu,point);
+      (sub.querySelector('button:not(.submenuBack):enabled')||ret).focus();
+    },'›');
+    b.setAttribute('aria-haspopup','true');
+  }
+  if(isGroup){
+    item('重命名组','rename',()=>nameDialog('group',id));
+    item('新建清单','plus',()=>nameDialog('list','',id));
+    item('取消分组','ungroup',()=>ungroup(id));
+  }else{
+    item('重命名清单','rename',()=>nameDialog('list',id),'F2');
+    section('将清单移动到…','move',()=>{
+      for(const g of sortedGroups()){
+        const b=menuItem(sub,g.name,'folder',()=>execute(()=>editList(id,{group:g.id})));
+        if(rec.group===g.id){b.disabled=true;b.append(el('small','当前组'))}
+      }
+      if(!sortedGroups().length)sub.append(el('p','请先在侧栏新建组。'));
+    });
+    const remove=item('从组中移除','ungroup',()=>editList(id,{group:''}));
+    remove.disabled=!rec.group||!records.get(groupKey(rec.group))||records.get(groupKey(rec.group)).data.deleted;
+    if(header){
+      main.append(el('hr'));
+      section('排序依据','sort',()=>{
+        for(const [mode,label] of Object.entries(sortLabels)){
+          const b=menuItem(sub,label,sortIcons[mode],()=>execute(()=>editList(id,{sort:mode})));
+          b.setAttribute('aria-pressed',String((rec.sort||'created')===mode));
+          if((rec.sort||'created')===mode)b.append(el('small','✓'));
+        }
+      });
+    }
+    item('复制清单','copy',()=>copyList(id));main.append(el('hr'));
+    item('删除清单','trash',()=>removeList(id),'Delete').classList.add('danger');
+  }
+  menu.onkeydown=e=>{
+    if(!sub.hidden&&(e.key==='Escape'||e.key==='ArrowLeft')){e.preventDefault();e.stopPropagation();back();return}
+    if(e.key==='ArrowRight'&&e.target.getAttribute('aria-haspopup')){e.preventDefault();e.target.click();return}
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();const pane=sub.hidden?main:sub,buttons=[...pane.querySelectorAll('button:enabled')].filter(b=>b.offsetWidth);
+      const idx=buttons.indexOf(document.activeElement),step=e.key==='ArrowDown'?1:-1;
+      buttons[(idx+step+buttons.length)%buttons.length]?.focus();
+    }
+  };
+  menu.onclick=e=>dismissOutside(menu,e);menu.showModal();positionMenu(menu,point);menu.focus();
+}
+const sortIcons={star:'star',due:'date',day:'day',name:'sort',created:'today'};
+
 function row(t){
   const a=el('article');a.dataset.taskId=t.id;a.classList.toggle('activeRow',editing?.id===t.id);
   const done=iconToggle(t.done?'恢复待办':'标记完成',t.done,'circle',()=>updateTask(t.id,{done:!t.done},t.done?'已恢复待办':'任务已完成'));
@@ -397,14 +628,19 @@ function render(){
     if(draftList)taskDrafts.set(draftList,$('quick').value);
     draftList=currentList;$('quick').value=taskDrafts.get(currentList)||'';
   }
-  matches.sort((a,b)=>view==='plan'?a.due.localeCompare(b.due)||b.created-a.created:b.created-a.created);
+  const current=records.get(listKey(currentList))?.data;
+  if(current)matches.sort(compareTasks(current.sort||'created'));
+  else matches.sort((a,b)=>view==='plan'?a.due.localeCompare(b.due)||b.created-a.created:b.created-a.created);
+  const parent=current?.group&&records.get(groupKey(current.group))?.data;
+  $('groupPath').hidden=!parent||!!parent.deleted;$('groupPath').textContent=parent&&!parent.deleted?parent.name:'';
+  $('listOptions').hidden=!currentList;
   $('heading').textContent=view==='home'?'我的清单':view==='legacy'?'待归类':view==='search'?'搜索结果':smart.find(x=>x[0]===view)?.[2]||listTitle(view.slice(5));
   $('stamp').textContent=view==='day'?new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'}):(view==='search'?filterText:view==='legacy'?'用任务右侧的「⋯」把旧任务移入清单。':'');
   $('suggest').hidden=view!=='day';$('suggest').setAttribute('aria-expanded',String(showingPicks));
   $('add').hidden=!currentList;$('smart').replaceChildren();$('lists').replaceChildren();
   function addNav(parent,id,label){nav(parent,id,label);const count=all.filter(t=>!t.done&&inView(t,id)).length;if(count)parent.lastChild.append(Object.assign(el('small',count),{className:'listCount'}))}
   smart.forEach(([id,,label])=>addNav($('smart'),id,label));
-  lists.forEach(l=>addNav($('lists'),'list:'+l.id,l.name));
+  listHierarchy($('lists'),lists,addNav);
   if(hasLegacy)addNav($('lists'),'legacy','待归类');
   const host=$('rows'), expanded=host.querySelector('details.completedGroup')?.open;host.replaceChildren();
   if(!matches.length){
@@ -514,25 +750,37 @@ async function api(path,options={}){const r=await fetch('https://api.github.com/
 async function verifyPrivate(){const meta=await api('');if(meta.private!==true)throw Error('请选择私有仓库保存待办。');branch=meta.default_branch}
 function decode(s){const bytes=Uint8Array.from(atob(s.replace(/\s/g,'')),c=>c.charCodeAt(0));return JSON.parse(new TextDecoder().decode(bytes))}
 function encode(d){const bytes=new TextEncoder().encode(JSON.stringify(d,null,2));let bin='';for(const b of bytes)bin+=String.fromCharCode(b);return btoa(bin)}
-async function loadRecords(treeRef=branch){const tree=await api('/git/trees/'+encodeURIComponent(treeRef)+'?recursive=1');if(tree.truncated)throw Error('仓库文件过多，无法完整载入。');const files=tree.tree.filter(f=>f.type==='blob'&&/^(lists|tasks)\/[a-f\d-]{36}\.json$/.test(f.path));const next=new Map();for(let i=0;i<files.length;i+=6){await Promise.all(files.slice(i,i+6).map(async f=>{const old=records.get(f.path);if(old?.sha===f.sha){next.set(f.path,old);return}const blob=await api('/git/blobs/'+f.sha);const data=decode(blob.content);if(f.path!== (f.path.startsWith('tasks/')?taskKey(data.id):listKey(data.id)))throw Error('任务文件格式无效');next.set(f.path,{sha:f.sha,data})}))}return next}
+async function loadRecords(treeRef=branch){const tree=await api('/git/trees/'+encodeURIComponent(treeRef)+'?recursive=1');if(tree.truncated)throw Error('仓库文件过多，无法完整载入。');const files=tree.tree.filter(f=>f.type==='blob'&&/^(groups|lists|tasks)\/[a-f\d-]{36}\.json$/.test(f.path));const next=new Map();for(let i=0;i<files.length;i+=6){await Promise.all(files.slice(i,i+6).map(async f=>{const old=records.get(f.path);if(old?.sha===f.sha){next.set(f.path,old);return}const blob=await api('/git/blobs/'+f.sha);const data=decode(blob.content);if(f.path!== (f.path.split('/')[0]+'/'+data.id+'.json'))throw Error('任务文件格式无效');next.set(f.path,{sha:f.sha,data})}))}return next}
 async function refresh(){if(!config||busy||refreshing||!branch)return;refreshing=true;const ticket=epoch;try{const next=await loadRecords();if(ticket===epoch){records=next;render();status('已同步 · 刷新')}}catch(e){if(ticket===epoch)status(e.message)}finally{refreshing=false}}
-async function storeFile(path,data,sha){await verifyPrivate();const out=await api('/contents/'+path,{method:'PUT',body:JSON.stringify({message:'更新待办清单',branch,content:encode(data),...(sha?{sha}:{})})});records.set(path,{data,sha:out.content.sha})}
+async function storeFile(path,data,sha){
+  const parent=path.startsWith('tasks/')?data.list&&listKey(data.list):path.startsWith('lists/')&&data.group&&groupKey(data.group);
+  const before=records.get(path)?.data;
+  if(parent&&(!before||before.list!==data.list||before.group!==data.group||before.deleted&&!data.deleted)){
+    return commitChanges([{path,data,expected:sha}],'更新待办清单',null,[parent]);
+  }
+  await verifyPrivate();const out=await api('/contents/'+path,{method:'PUT',body:JSON.stringify({message:'更新待办清单',branch,content:encode(data),...(sha?{sha}:{})})});records.set(path,{data,sha:out.content.sha})}
 async function change(fn){if(!config){showSetup();return}if(busy)return;busy=true;epoch++;lockControls();status('正在保存…');try{await fn();render();status('已同步 · 刷新')}catch(e){status(e.message);alert(e.message)}finally{busy=false;lockControls()}}
 const backupFormat = 'to-doo-backup';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function makeBackup(map) {
   const pick = prefix => [...map].filter(([path]) => path.startsWith(prefix)).map(([, record]) => record.data);
-  return {format:backupFormat, version:1, exportedAt:new Date().toISOString(),
-    fields:{lists:'Each list has an id and name. Empty lists are retained.',
+  return {format:backupFormat, version:2, exportedAt:new Date().toISOString(),
+    fields:{groups:'Each group has an id and name. Ungrouped groups and deleted lists can carry deleted=true.',lists:'group references groups.id; empty or absent means ungrouped. sort is star, due, day, name, or created (default). Empty groups and lists are retained.',
       tasks:'list references lists.id. An empty list identifies an unassigned task from an older version. day and due are local YYYY-MM-DD dates. created is Unix milliseconds. done, star, deleted and steps[].done are booleans. Optional repeat: daily, weekdays, weekly, monthly, yearly. repeatAnchor is the calendar reference date.',
-      restore:'Write lists and tasks as UTF-8 JSON in lists/{id}.json and tasks/{id}.json in an initialized private data repo. Retain IDs and list links. Independent programs can read the arrays directly.'},
-    lists:pick('lists/'), tasks:pick('tasks/')};
+      restore:'Write groups, lists and tasks as UTF-8 JSON in groups/{id}.json, lists/{id}.json and tasks/{id}.json in an initialized private data repo. Retain IDs and list links. Independent programs can read the arrays directly.'},
+    groups:pick('groups/'), lists:pick('lists/'), tasks:pick('tasks/')};
 }
 function readBackup(data) {
-  if(data?.format!==backupFormat || data.version!==1 || !Array.isArray(data.lists) || !Array.isArray(data.tasks)) throw Error('请选择 To Doo 的第 1 版 JSON 完整备份。');
+  if(data?.format!==backupFormat || ![1,2].includes(data.version) || (data.version===2&&!Array.isArray(data.groups)) || !Array.isArray(data.lists) || !Array.isArray(data.tasks)) throw Error('请选择 To Doo 的 JSON 完整备份（第 1 或第 2 版）。');
   const map=new Map(), text=s=>typeof s==='string', date=s=>text(s)&&(!s||/^\d{4}-\d{2}-\d{2}$/.test(s));
   function add(path,record){if(map.has(path))throw Error('备份中有重复编号。');map.set(path,{data:record})}
+  for(const g of data.groups||[]){
+    if(!g||!uuid.test(g.id)||!text(g.name)||!g.name.trim()||('deleted' in g&&typeof g.deleted!=='boolean'))throw Error('组的名称或编号无效。');
+    add(groupKey(g.id),g);
+  }
   for(const l of data.lists){
+    if(l?.group&&!map.has(groupKey(l.group)))throw Error('有清单引用了缺失的组。');
+    if(l?.sort&&!Object.hasOwn(sortLabels,l.sort))throw Error('清单排序无效。');
     if(!l||!uuid.test(l.id)||!text(l.name)||!l.name.trim())throw Error('清单名称或编号无效。');
     add(listKey(l.id),l);
   }
@@ -546,10 +794,11 @@ function readBackup(data) {
   return map;
 }
 function csvData(data) {
-  const names=new Map(data.lists.map(l=>[l.id,l.name]));
-  const header=['任务编号','清单编号','清单','任务','状态','重要','我的一天','截止日期','创建时间','备注','步骤（JSON）','已删除','重复','重复基准日'];
+  const lists=new Map(data.lists.map(l=>[l.id,l]));
+  const groups=new Map((data.groups||[]).map(g=>[g.id,g.name]));
+  const header=['任务编号','清单编号','清单','任务','状态','重要','我的一天','截止日期','创建时间','备注','步骤（JSON）','已删除','重复','重复基准日','组编号','组'];
   const cell=value=>{let s=String(value??'');if(/^[\s]*[=+@-]|^[\t\r\n]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"'};
-  const rows=data.tasks.map(t=>[t.id,t.list,names.get(t.list)||'待归类',t.title,t.done?'已完成':'待处理',t.star?'是':'否',t.day,t.due,new Date(t.created).toISOString(),t.note,JSON.stringify(t.steps),t.deleted?'是':'否',repeatNames[t.repeat]||'',t.repeatAnchor||'']);
+  const rows=data.tasks.map(t=>[t.id,t.list,lists.get(t.list)?.name||'待归类',t.title,t.done?'已完成':'待处理',t.star?'是':'否',t.day,t.due,new Date(t.created).toISOString(),t.note,JSON.stringify(t.steps),t.deleted?'是':'否',repeatNames[t.repeat]||'',t.repeatAnchor||'',lists.get(t.list)?.group||'',groups.get(lists.get(t.list)?.group)||'未分组']);
   return '\ufeff'+[header,...rows].map(r=>r.map(cell).join(',')).join('\r\n');
 }
 function downloadAs(name,mime,content){
@@ -565,7 +814,7 @@ async function exportFile(csv){
     const snapshot=makeBackup(await loadRecords());readBackup(snapshot);
     const tag=snapshot.exportedAt.replace(/[:.]/g,'-');
     downloadAs('To-Doo-'+tag+(csv?'.csv':'.json'),csv?'text/csv;charset=utf-8':'application/json',csv?csvData(snapshot):JSON.stringify(snapshot,null,2));
-    archiveMessage('已生成下载：'+snapshot.lists.length+' 个清单、'+snapshot.tasks.length+' 条任务记录（含已删除）。');
+    archiveMessage('已生成下载：'+snapshot.groups.filter(g=>!g.deleted).length+' 个组、'+snapshot.lists.filter(l=>!l.deleted).length+' 个清单、'+snapshot.tasks.length+' 条任务记录（含已删除）。');
   }catch(e){archiveMessage(e.message)}finally{archiveBusy=false}
 }
 function inspectFile(){
@@ -573,11 +822,12 @@ function inspectFile(){
   const data=makeBackup(incoming),select=el('select'),state=el('select'),results=el('div');
   select.setAttribute('aria-label','按清单筛选备份');state.setAttribute('aria-label','按状态筛选备份');
   select.add(new Option('全部清单','*'));if(data.tasks.some(t=>!t.list))select.add(new Option('待归类',''));
-  data.lists.forEach(l=>select.add(new Option(l.name,l.id)));
+  data.groups.filter(g=>!g.deleted).forEach(g=>select.add(new Option('组 · '+g.name,'group:'+g.id)));
+  data.lists.forEach(l=>select.add(new Option(groupedName(l,incoming)+(l.deleted?'（已删除）':''),l.id)));
   for(const [name,key] of [['全部状态','all'],['待处理','open'],['已完成','done'],['已删除','trash']])state.add(new Option(name,key));
   function filter(){
     results.replaceChildren();
-    const rows=data.tasks.filter(t=>(select.value==='*'||select.value===t.list)&&(state.value==='trash'?t.deleted:!t.deleted&&(state.value==='all'||t.done===(state.value==='done'))));
+    const rows=data.tasks.filter(t=>(select.value==='*'||select.value===t.list||select.value==='group:'+incoming.get(listKey(t.list))?.data.group)&&(state.value==='trash'?t.deleted:!t.deleted&&(state.value==='all'||t.done===(state.value==='done'))));
     results.append(el('p',rows.length+' 条任务'));
     for(const t of rows){const item=el('details'),title=el('summary',t.title),name=incoming.get(listKey(t.list))?.data.name||'待归类';item.append(title,el('p',[name,t.done?'已完成':'待处理',t.star?'重要':'',t.due&&'截止 '+t.due,repeatNames[t.repeat],t.day&&'我的一天 '+t.day].filter(Boolean).join(' · ')),el('p',t.note));for(const step of t.steps)item.append(el('p',(step.done?'✓ ':'○ ')+step.title));results.append(item)}
   }
@@ -617,7 +867,7 @@ $('importFile').onchange=async e=>{
   incoming=null;$('replaceChanged').checked=false;$('restoreMode').hidden=$('previewFile').hidden=$('restore').hidden=true;$('backupView').replaceChildren();archiveMessage('');$('importInfo').textContent='';
   const file=e.target.files[0];if(!file)return;
   try{const data=JSON.parse(await file.text());incoming=readBackup(data);
-    $('importInfo').textContent=data.lists.length+' 个清单、'+data.tasks.length+' 条任务记录。恢复会补入缺失记录，保留已有记录。';
+    $('importInfo').textContent=(data.groups||[]).filter(g=>!g.deleted).length+' 个组、'+data.lists.filter(l=>!l.deleted).length+' 个清单、'+data.tasks.length+' 条任务记录。恢复会补入缺失记录，保留已有记录。';
     $('restoreMode').hidden=$('previewFile').hidden=$('restore').hidden=false;
   }catch(error){$('importInfo').textContent=error.message}
 };
@@ -635,18 +885,10 @@ $('add').onsubmit=async e=>{
   });
   if(activeListId()===list)$('quick').focus();
 };
-async function newList(){
-  if(busy||!await finishEdit())return;
-  if(!config){resumeNewList=true;showSetup();return}
-  $('listName').value='';$('listBox').showModal();$('listName').focus();
-}
-$('newList').onclick=newList;$('cancelList').onclick=()=>$('listBox').close();
-$('listForm').onsubmit=async e=>{
-  e.preventDefault();const name=$('listName').value.trim();if(!name||busy)return;
-  const l={id:crypto.randomUUID(),name};
-  await change(async()=>{await storeFile(listKey(l.id),l);$('listBox').close();await choose('list:'+l.id)});
-  if(activeListId()===l.id)$('quick').focus();
-};
+function newList(){return nameDialog('list')}
+$('newList').onclick=newList;$('newGroup').onclick=()=>nameDialog('group');
+$('cancelList').onclick=()=>$('listBox').close();$('listForm').onsubmit=saveName;
+$('listOptions').onclick=e=>{const id=activeListId();if(id)collectionMenu('list',id,menuPoint(e.currentTarget),true)};
 $('scheduleMenu').onclick=e=>{const menu=$('scheduleMenu');if(e.target!==menu)return;const box=menu.getBoundingClientRect();if(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom)menu.close()};
 $('suggest').onclick=openPicks;
 $('lookup').oninput=async()=>{
@@ -671,7 +913,7 @@ window.addEventListener('beforeunload',e=>{if(editing?.dirty){e.preventDefault()
 $('settings').onclick=showSetup;$('drawer').onclick=()=>$('side').classList.toggle('open');$('sync').onclick=()=>config&&branch?refresh():showSetup();$('dismiss').onclick=()=>{resumeNewList=false;$('setup').close()};
 $('setup').addEventListener('cancel',()=>{resumeNewList=false});
 function clearWorkspace(){
-  pendingAdd=null;draftList='';taskDrafts.clear();$('quick').value='';
+  collapsedGroups.clear();pendingAdd=null;draftList='';taskDrafts.clear();$('quick').value='';
   view=previousView='home';filterText='';$('lookup').value='';closeDetail();
 }
 function disconnect(){if(editing)clearTimeout(editing.timer);epoch++;branch='';config=null;records.clear();clearWorkspace();sessionStorage.removeItem(key);localStorage.removeItem(key);$('token').value='';status('连接 GitHub');render()}
@@ -680,7 +922,7 @@ async function connect(c,remember,restoring=false){if(!await finishEdit())return
   localStorage.setItem(key+':repo',c.repo);
   const keep=remember?localStorage:sessionStorage,other=remember?sessionStorage:localStorage;
   keep.setItem(key,JSON.stringify(c));other.removeItem(key);
-}$('token').value='';$('setupError').textContent='';$('setup').close();clearWorkspace();render();status('已同步 · 刷新')}catch(e){disconnect();if(!$('setup').open)$('setup').showModal();$('setupError').textContent=e.message}finally{busy=false;lockControls()}if(config&&resumeNewList){resumeNewList=false;await newList()}}
+}$('token').value='';$('setupError').textContent='';$('setup').close();clearWorkspace();render();status('已同步 · 刷新')}catch(e){disconnect();if(!$('setup').open)$('setup').showModal();$('setupError').textContent=e.message}finally{busy=false;lockControls()}if(config&&resumeNewList){const {kind,id,group}=resumeNewList;resumeNewList=false;await nameDialog(kind,id,group)}}
 $('connect').onsubmit=e=>{e.preventDefault();const repo=$('repo').value.trim(),token=$('token').value.trim();if(!/^[a-z\d-]+\/[\w.-]+$/i.test(repo)||!token){$('setupError').textContent='请填写用户名/仓库名及令牌。';return}connect({repo,token},$('remember').checked)};
 render();let saved;try{saved=JSON.parse(sessionStorage.getItem(key)||localStorage.getItem(key)||'null')}catch{}if(saved)connect(saved,false,true);else status('连接 GitHub');setInterval(()=>{if(!document.hidden)refresh()},30000);window.addEventListener('focus',refresh);
 </script></html>
