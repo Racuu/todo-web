@@ -224,6 +224,7 @@ async function commitChanges(changes,message,scope,parents=[]){
   // Tree creation may return only the root entries for nested paths.
   if(changes.every(c=>changed.has(c.path))){for(const c of changes)records.set(c.path,{data:c.data,sha:changed.get(c.path)})}
   else records=await loadRecords();
+  scheduleSnapshot();
 }
 async function completeRepeating(record){
   const original=record.data,path=taskKey(original.id),due=nextDue(original);
@@ -620,7 +621,9 @@ function row(t){
   };
   a.append(done,title,more,iconToggle(t.star?'取消重要':'标为重要',t.star,'star',()=>updateTask(t.id,{star:!t.star})));return a;
 }
+let lastRenderDay;
 function render(){
+  lastRenderDay=today();
   const all=entries('tasks'),lists=sortedLists(),hasLegacy=all.some(t=>!t.deleted&&!t.list);
   if(view==='home'||(view==='legacy'&&!hasLegacy)||(view.startsWith('list:')&&!activeListId()))view=defaultView(lists);
   const currentList=activeListId(),matches=all.filter(t=>inView(t,view));
@@ -660,7 +663,7 @@ function render(){
   const activeTasks=matches.filter(t=>!t.done);
   if(view==='plan')renderPlanned(host,activeTasks);else for(const t of activeTasks)host.append(row(t));
   const done=matches.filter(t=>t.done);
-  if(done.length){const d=el('details');d.className='completedGroup';d.open=!!expanded;d.append(el('summary','已完成 · '+done.length),...done.map(row));host.append(d)}
+  if(done.length){const d=el('details');d.className='completedGroup';d.open=!!expanded;d.append(el('summary','已完成 · '+done.length));const fill=()=>{if(d.open&&d.children.length===1)d.append(...done.map(row))};d.ontoggle=fill;fill();host.append(d)}
   if(showingPicks)drawPicks();
 }
 function drawPicks(){
@@ -765,6 +768,19 @@ async function api(path,options={}){const r=await fetch('https://api.github.com/
 async function verifyPrivate(){const meta=await api('');if(meta.private!==true)throw Error('请选择私有仓库保存待办。');branch=meta.default_branch}
 function decode(s){const bytes=Uint8Array.from(atob(s.replace(/\s/g,'')),c=>c.charCodeAt(0));return JSON.parse(new TextDecoder().decode(bytes))}
 function encode(d){const bytes=new TextEncoder().encode(JSON.stringify(d,null,2));let bin='';for(const b of bytes)bin+=String.fromCharCode(b);return btoa(bin)}
+let snapshotStore=null,snapshotTimer=0;
+function snapshotKey(){return key+':snapshot:'+config.repo.toLowerCase()+':'+branch}
+function readSnapshot(){
+  try{return new Map(JSON.parse(snapshotStore.getItem(snapshotKey())||'[]'))}
+  catch{return new Map()}
+}
+function scheduleSnapshot(){
+  clearTimeout(snapshotTimer);
+  if(!snapshotStore||!config||!branch)return;
+  snapshotTimer=setTimeout(()=>{
+    try{snapshotStore.setItem(snapshotKey(),JSON.stringify([...records]))}catch{}
+  },300);
+}
 async function loadRecords(treeRef=branch){
   const tree=await api('/git/trees/'+encodeURIComponent(treeRef)+'?recursive=1');
   if(tree.truncated)throw Error('仓库文件过多，无法完整载入。');
@@ -778,6 +794,7 @@ async function loadRecords(treeRef=branch){
     if(f.path!==f.path.split('/')[0]+'/'+data.id+'.json')throw Error('任务文件格式无效');
     next.set(f.path,{sha:f.sha,data});
   }
+  if(!missing.length&&next.size===records.size)return records;
   if(missing.length<8){
     for(const f of missing)add(f,decode((await api('/git/blobs/'+f.sha)).content));
     return next;
@@ -806,14 +823,14 @@ async function loadRecords(treeRef=branch){
   }
   return next;
 }
-async function refresh(){if(!config||busy||refreshing||!branch)return;refreshing=true;const ticket=epoch;try{const next=await loadRecords();if(ticket===epoch){records=next;render();status('已同步 · 刷新')}}catch(e){if(ticket===epoch)status(e.message)}finally{refreshing=false}}
+async function refresh(){if(!config||busy||refreshing||!branch)return;refreshing=true;const ticket=epoch;try{const next=await loadRecords();if(ticket===epoch){if(next!==records||lastRenderDay!==today()){records=next;render();scheduleSnapshot()}status('已同步 · 刷新')}}catch(e){if(ticket===epoch)status(e.message)}finally{refreshing=false}}
 async function storeFile(path,data,sha){
   const parent=path.startsWith('tasks/')?data.list&&listKey(data.list):path.startsWith('lists/')&&data.group&&groupKey(data.group);
   const before=records.get(path)?.data;
   if(parent&&(!before||before.list!==data.list||before.group!==data.group||before.deleted&&!data.deleted)){
     return commitChanges([{path,data,expected:sha}],'更新待办清单',null,[parent]);
   }
-  await verifyPrivate();const out=await api('/contents/'+path,{method:'PUT',body:JSON.stringify({message:'更新待办清单',branch,content:encode(data),...(sha?{sha}:{})})});records.set(path,{data,sha:out.content.sha})}
+  await verifyPrivate();const out=await api('/contents/'+path,{method:'PUT',body:JSON.stringify({message:'更新待办清单',branch,content:encode(data),...(sha?{sha}:{})})});records.set(path,{data,sha:out.content.sha});scheduleSnapshot()}
 async function change(fn){if(!config){showSetup();return}if(busy)return;busy=true;epoch++;lockControls();status('正在保存…');try{await fn();render();status('已同步 · 刷新')}catch(e){status(e.message);alert(e.message)}finally{busy=false;lockControls()}}
 const backupFormat = 'to-doo-backup';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -910,7 +927,7 @@ async function restoreMissing(){
     const tree=await post('/git/trees',{base_tree:base,tree:additions});
     const commit=await post('/git/commits',{message:'从 To Doo 完整备份恢复清单和任务',tree:tree.sha,parents:[head]});
     await post(refPath.replace('/git/ref/','/git/refs/'),{sha:commit.sha,force:false},'PATCH');
-    archiveMessage('已恢复。'+summary);records=await loadRecords();render();status('已同步 · 刷新');
+    archiveMessage('已恢复。'+summary);records=await loadRecords();scheduleSnapshot();render();status('已同步 · 刷新');
   }catch(e){archiveMessage('请刷新后核对目标仓库，再重试。'+e.message)}
   finally{busy=false;archiveBusy=false;lockControls();$('restore').disabled=false}
 }
@@ -971,9 +988,9 @@ function clearWorkspace(){
   collapsedGroups.clear();pendingAdd=null;draftList='';taskDrafts.clear();$('quick').value='';
   view=previousView='home';filterText='';$('lookup').value='';closeDetail();
 }
-function disconnect(){if(editing)clearTimeout(editing.timer);epoch++;branch='';config=null;records.clear();clearWorkspace();sessionStorage.removeItem(key);localStorage.removeItem(key);$('token').value='';status('连接 GitHub');render()}
+function disconnect(){clearTimeout(snapshotTimer);if(snapshotStore&&config&&branch){try{snapshotStore.removeItem(snapshotKey())}catch{}}snapshotStore=null;if(editing)clearTimeout(editing.timer);epoch++;branch='';config=null;records.clear();clearWorkspace();sessionStorage.removeItem(key);localStorage.removeItem(key);$('token').value='';status('连接 GitHub');render()}
 $('forget').onclick=()=>{resumeNewList=false;disconnect();$('setup').close()};
-async function connect(c,remember,restoring=false){if(!await finishEdit())return;busy=true;epoch++;lockControls();records.clear();branch='';config=c;try{await verifyPrivate();records=await loadRecords();if(!restoring){
+async function connect(c,remember,restoring=false){if(!await finishEdit())return;clearTimeout(snapshotTimer);snapshotStore=null;busy=true;epoch++;lockControls();records.clear();branch='';config=c;try{await verifyPrivate();snapshotStore=(remember||(restoring&&!sessionStorage.getItem(key)&&localStorage.getItem(key)))?localStorage:sessionStorage;records=readSnapshot();if(records.size){clearWorkspace();render();lockControls();status('正在核对云端更新…')}records=await loadRecords();scheduleSnapshot();if(!restoring){
   localStorage.setItem(key+':repo',c.repo);
   const keep=remember?localStorage:sessionStorage,other=remember?sessionStorage:localStorage;
   keep.setItem(key,JSON.stringify(c));other.removeItem(key);
