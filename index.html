@@ -711,6 +711,31 @@ function mountEditor(record){
   const line=el('div');line.className='editTitle';line.append(done,title,star);card.append(line);
   const steps=el('div'),draftSteps=structuredClone(t.steps);
   function saveSteps(){recordEdit(s,'steps',structuredClone(draftSteps),true)}
+  function removeStep(index){
+    const [removed]=draftSteps.splice(index,1);
+    const remaining=JSON.stringify(draftSteps);
+    const repo=config.repo;
+    drawSteps();
+    saveSteps();
+    notifyAction('已删除步骤',async()=>{
+      if(config?.repo!==repo)return;
+      if(editing===s){
+        draftSteps.splice(index,0,removed);
+        drawSteps();
+        saveSteps();
+        return;
+      }
+      if(!await finishEdit())return;
+      const current=records.get(taskKey(t.id))?.data;
+      if(!current||current.deleted||JSON.stringify(current.steps)!==remaining){
+        notifyAction('步骤已变更，无法撤销');
+        return;
+      }
+      const restored=current.steps.slice();
+      restored.splice(index,0,removed);
+      await updateTask(t.id,{steps:restored});
+    });
+  }
   function drawSteps(){
     steps.replaceChildren();draftSteps.forEach((step,i)=>{
       const item=el('div');item.className='step';
@@ -718,7 +743,7 @@ function mountEditor(record){
       const input=el('input');input.type='text';input.value=step.title;input.maxLength=500;input.setAttribute('aria-label','步骤名称');
       input.oninput=()=>{if(input.value.trim()){step.title=input.value.trim();recordEdit(s,'steps',structuredClone(draftSteps))}};
       input.onblur=()=>{input.value=step.title};input.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();queueEdit(s);next.focus()}};
-      const remove=button('×',()=>{draftSteps.splice(i,1);saveSteps();drawSteps()});remove.setAttribute('aria-label','移除步骤 '+step.title);item.append(check,input,remove);steps.append(item);
+      const remove=button('×',()=>removeStep(i));remove.setAttribute('aria-label','移除步骤 '+step.title);item.append(check,input,remove);steps.append(item);
     });
   }
   const next=el('input');next.placeholder='添加步骤';next.maxLength=500;next.setAttribute('aria-label','添加步骤');
