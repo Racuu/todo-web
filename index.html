@@ -196,15 +196,27 @@ function dates(offset=0){
   return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 }
 function dueName(d){return d===today()?'今天':d===dates(1)?'明天':d}
-function inView(t,id){
+// A task scheduled ahead of time enters My Day on its local due date without a cloud write.
+function myDayDate(task,day=today()){
+  if(!task.done&&!task.deleted&&task.due===day&&task.dayDismissed!==day)return day;
+  return task.day;
+}
+function toggleMyDay(task){
+  const day=today(),remove=myDayDate(task,day)===day;
+  const patch={day:remove?'':day};
+  if(remove&&task.due===day)patch.dayDismissed=day;
+  else if(task.dayDismissed)patch.dayDismissed='';
+  return updateTask(task.id,patch);
+}
+function inView(t,id,day=today()){
   if(t.deleted||records.get(listKey(t.list))?.data.deleted)return false;
   if(id==='search'){const q=filterText.trim().toLocaleLowerCase();return q&&[t.title,t.note,listTitle(t.list),...t.steps.map(s=>s.title)].some(x=>x.toLocaleLowerCase().includes(q))}
-  return id==='day'&&t.day===today()||id==='star'&&t.star||id==='plan'&&!!t.due||id==='legacy'&&!t.list||id==='list:'+t.list;
+  return id==='day'&&myDayDate(t,day)===day||id==='star'&&t.star||id==='plan'&&!!t.due||id==='legacy'&&!t.list||id==='list:'+t.list;
 }
 function suggestions(tasks){
   const todayKey=today();
   const rank=t=>t.due&&t.due<=todayKey?0:t.day&&t.day<todayKey?1:t.star?2:3;
-  return tasks.filter(t=>!t.deleted&&!records.get(listKey(t.list))?.data.deleted&&!t.done&&t.day!==todayKey).sort((a,b)=>rank(a)-rank(b)||b.created-a.created);
+  return tasks.filter(t=>!t.deleted&&!records.get(listKey(t.list))?.data.deleted&&!t.done&&myDayDate(t,todayKey)!==todayKey).sort((a,b)=>rank(a)-rank(b)||b.created-a.created);
 }
 function closeDetail(){
   editing=null;showingPicks=false;
@@ -317,7 +329,7 @@ async function commitChanges(changes,message,scope,parents=[],scopePrefix=''){
 async function completeRepeating(record){
   const original=record.data,path=taskKey(original.id),due=nextDue(original);
   const next={...original,due,repeatAnchor:original.repeatAnchor||original.due||today(),day:'',steps:original.steps.map(s=>({...s,done:false}))};
-  const history={...original,id:crypto.randomUUID(),done:true,repeat:'',repeatAnchor:''};
+  const history={...original,day:myDayDate(original),id:crypto.randomUUID(),done:true,repeat:'',repeatAnchor:''};
   const past=taskKey(history.id);
   await commitChanges([{path,expected:record.sha,data:next},{path:past,expected:undefined,data:history}],'完成重复任务并安排下一次');
   const nextSha=records.get(path)?.sha,pastSha=records.get(past)?.sha;
@@ -395,6 +407,16 @@ async function updateTask(id,patch,undoLabel){
   if(!current)return;
   if(patch.done===true&&!current.data.done&&repeatNames[current.data.repeat])return change(()=>completeRepeating(records.get(key)));
   if('due' in patch && current.data.repeat && !('repeatAnchor' in patch))patch={...patch,repeatAnchor:patch.due};
+  const day=today(),task=current.data;
+  if(!('day' in patch)&&!task.done){
+    if(patch.due===day){
+      patch={...patch,day};
+      if(task.dayDismissed)patch.dayDismissed='';
+    }else if((patch.done===true||'due' in patch)&&myDayDate(task,day)===day&&task.day!==day){
+      // Keep today's entry when completing or rescheduling an automatically included task.
+      patch={...patch,day};
+    }
+  }
   const old=Object.fromEntries(Object.keys(patch).map(k=>[k,current.data[k]]));
   await change(async()=>{
     const base=records.get(key);if(!base||base.data.deleted&&!('deleted' in patch))return;
@@ -414,7 +436,7 @@ function runTaskAction(id,action){
   const t=records.get(taskKey(id))?.data;
   if(busy||!t||t.deleted)return;
   switch(action){
-    case 'day':return updateTask(id,{day:t.day===today()?'':today()});
+    case 'day':return toggleMyDay(t);
     case 'star':return updateTask(id,{star:!t.star});
     case 'done':return updateTask(id,{done:!t.done},t.done?'已恢复待办':'任务已完成');
     case 'delete':return deleteTask(id);
@@ -457,7 +479,7 @@ function taskMenu(t,anchor){
   }
   function main(focus){
     page='actions';menu.replaceChildren();
-    action(t.day===today()?'移出“我的一天”':'添加到“我的一天”','day','day','T');
+    action(myDayDate(t)===today()?'移出“我的一天”':'添加到“我的一天”','day','day','T');
     action(t.star?'取消重要标记':'标记为重要','star','star');
     action(t.done?'标记为未完成':'标记为已完成','done','done','D');
     menu.append(el('hr'));
@@ -562,7 +584,7 @@ function compareTasks(mode){
     let n=0;
     if(mode==='star')n=Number(b.star)-Number(a.star);
     if(mode==='due')n=(a.due||'9999-99-99').localeCompare(b.due||'9999-99-99');
-    if(mode==='day')n=Number(b.day===day)-Number(a.day===day);
+    if(mode==='day')n=Number(myDayDate(b,day)===day)-Number(myDayDate(a,day)===day);
     if(mode==='name')n=a.title.localeCompare(b.title,'zh-CN',{numeric:true});
     return n||b.created-a.created||a.id.localeCompare(b.id);
   };
@@ -836,7 +858,7 @@ function row(t){
   const done=iconToggle(t.done?'恢复待办':'标记完成',t.done,'circle',()=>updateTask(t.id,{done:!t.done},t.done?'已恢复待办':'任务已完成'));
   const title=button('',()=>openTask(t));title.className='title';
   const name=el('span',t.title);if(t.done)name.className='checked';title.append(name);
-  const sub=[(view==='list:'+t.list||view==='legacy')?'':listTitle(t.list),view!=='day'&&t.day===today()?'我的一天':'',t.due?'截止 '+dueName(t.due):'',t.steps.length?t.steps.filter(s=>s.done).length+'/'+t.steps.length+' 步':''].filter(Boolean);
+  const sub=[(view==='list:'+t.list||view==='legacy')?'':listTitle(t.list),view!=='day'&&myDayDate(t)===today()?'我的一天':'',t.due?'截止 '+dueName(t.due):'',t.steps.length?t.steps.filter(s=>s.done).length+'/'+t.steps.length+' 步':''].filter(Boolean);
   if(sub.length)title.append(el('small',sub.join(' · ')));
   const more=button('⋯',e=>{const box=e.currentTarget.getBoundingClientRect();taskMenu(t,{x:box.left,y:box.bottom})});more.className='rowMore';more.setAttribute('aria-label','更多任务操作');more.title='更多任务操作';more.setAttribute('aria-haspopup','dialog');
   a.oncontextmenu=e=>{
@@ -865,10 +887,12 @@ function appendTaskRows(host,tasks){
 }
 let lastRenderDay;
 function render(){
-  rowObserver?.disconnect();lastRenderDay=today();
+  rowObserver?.disconnect();const day=today();
+  if(lastRenderDay!==day)editing?.refreshDates?.();
+  lastRenderDay=day;
   const all=entries('tasks'),lists=sortedLists(),hasLegacy=all.some(t=>!t.deleted&&!t.list);
   if(view==='home'||(view==='legacy'&&!hasLegacy)||(view.startsWith('list:')&&!activeListId()))view=defaultView(lists);
-  const currentList=activeListId(),matches=all.filter(t=>inView(t,view));
+  const currentList=activeListId(),matches=all.filter(t=>inView(t,view,day));
   if(draftList!==currentList){
     if(draftList)taskDrafts.set(draftList,$('quick').value);
     draftList=currentList;$('quick').value=taskDrafts.get(currentList)||'';
@@ -883,11 +907,11 @@ function render(){
   $('stamp').textContent=view==='day'?new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'}):(view==='search'?filterText:view==='legacy'?'用任务右侧的「⋯」把旧任务移入清单。':'');
   $('suggest').hidden=view!=='day';$('suggest').setAttribute('aria-expanded',String(showingPicks));
   $('add').hidden=!currentList;$('smart').replaceChildren();$('lists').replaceChildren();
-  const counts=new Map(),day=today();
+  const counts=new Map();
   const countView=id=>counts.set(id,(counts.get(id)||0)+1);
   for(const t of all){
     if(t.deleted||t.done||records.get(listKey(t.list))?.data.deleted)continue;
-    countView(t.list?'list:'+t.list:'legacy');if(t.star)countView('star');if(t.due)countView('plan');if(t.day===day)countView('day');
+    countView(t.list?'list:'+t.list:'legacy');if(t.star)countView('star');if(t.due)countView('plan');if(myDayDate(t,day)===day)countView('day');
   }
   function addNav(parent,id,label){nav(parent,id,label);const count=counts.get(id);if(count)parent.lastChild.append(Object.assign(el('small',count),{className:'listCount'}))}
   smart.forEach(([id,,label])=>addNav($('smart'),id,label));
@@ -899,7 +923,7 @@ function render(){
     const copy={
       home:['从一张清单开始','给清单起个名字，就可以往里添加任务。'],
       search:['未找到匹配的任务','试试任务名称、步骤或备注中的其他词。'],
-      day:['今天要做什么？','从「建议」中选择，或在清单中将任务加入「我的一天」。'],
+      day:['今天要做什么？','今天到期的待办会自动加入。也可以从「建议」或清单中手动添加。'],
       star:['还没有重要任务','点击清单中任务右侧的星标，就会在这里看到它。'],
       plan:['还没有计划内任务','为清单中的任务设置截止日期，就会在这里看到它。']
     };
@@ -919,7 +943,7 @@ function drawPicks(){
   host.append(button('‹ 返回清单',()=>returnToLayer()),el('h2','我的一天建议'));
   const picks=suggestions(entries('tasks'));
   if(!picks.length)host.append(el('p',config?'暂无可加入的未完成任务。':'连接任务库后，这里会显示其他清单中的未完成任务。'));
-  for(const t of picks){const line=el('div');line.className='pick';const label=el('div');label.append(el('strong',t.title),el('small',[listTitle(t.list),t.due&&'截止 '+dueName(t.due),t.star&&'重要'].filter(Boolean).join(' · ')));const add=button('＋',()=>updateTask(t.id,{day:today()},'已加入我的一天'));add.setAttribute('aria-label','加入我的一天：'+t.title);line.append(label,add);host.append(line)}
+  for(const t of picks){const line=el('div');line.className='pick';const label=el('div');label.append(el('strong',t.title),el('small',[listTitle(t.list),t.due&&'截止 '+dueName(t.due),t.star&&'重要'].filter(Boolean).join(' · ')));const add=button('＋',()=>updateTask(t.id,{day:today(),...(t.dayDismissed?{dayDismissed:''}:{})},'已加入我的一天'));add.setAttribute('aria-label','加入我的一天：'+t.title);line.append(label,add);host.append(line)}
 }
 async function openPicks(){if(!await finishEdit())return;const open=!showingPicks;closeDetail();showingPicks=open;render()}
 function queueEdit(session){
@@ -1091,12 +1115,19 @@ function mountEditor(record){
   const stepForm=el('form');stepForm.className='stepAdd';const submit=el('button','＋');submit.setAttribute('aria-label','确认添加步骤');
   stepForm.append(submit,next);stepForm.onsubmit=e=>{e.preventDefault();if(!next.value.trim())return;draftSteps.push({title:next.value.trim(),done:false});next.value='';drawSteps();saveSteps();next.focus()};
   drawSteps();card.append(steps,stepForm);host.append(card);
-  const day=actionButton(t.day===today()?'已添加到“我的一天”':'添加到“我的一天”','day',()=>updateTask(t.id,{day:t.day===today()?'':today()}));
-  day.classList.add('detailCard');day.setAttribute('aria-pressed',String(t.day===today()));host.append(day);
+  const day=actionButton('','day',()=>runTaskAction(t.id,'day'));
+  day.classList.add('detailCard');host.append(day);
   const schedule=el('section');schedule.className='scheduleCard detailCard';
-  const due=actionButton(t.due?'截止于 '+dueName(t.due):'添加截止日期','date',()=>{
+  const due=actionButton('','date',()=>{
     datePicker(due,t.due,value=>updateTask(t.id,value?{due:value,...(t.repeat?{repeatAnchor:value}:{})}:{due:'',repeat:'',repeatAnchor:''}));
   });
+  s.refreshDates=()=>{
+    const included=myDayDate(t)===today();
+    day.lastElementChild.textContent=included?'已添加到“我的一天”':'添加到“我的一天”';
+    day.setAttribute('aria-pressed',String(included));
+    due.lastElementChild.textContent=t.due?'截止于 '+dueName(t.due):'添加截止日期';
+  };
+  s.refreshDates();
   const repeat=actionButton(repeatNames[t.repeat]||'重复','repeat',()=>{
     repeatPicker(repeat,t.repeat||'',value=>{
       const patch={repeat:value,repeatAnchor:value?(t.due||today()):''};
@@ -1398,7 +1429,7 @@ function showConflict(){
   if(!entry)return false;
   const dev=device,[path,draft]=entry,{remote,fields}=draft.conflict;
   const box=$('conflictBox');box.replaceChildren(el('h2','选择任务版本'),el('p',draft.data.title));
-  const labels={title:'任务名称',note:'备注',steps:'步骤',day:'我的一天',due:'截止日期',done:'完成状态',star:'重要',list:'清单',deleted:'删除状态'};
+  const labels={title:'任务名称',note:'备注',steps:'步骤',day:'我的一天',dayDismissed:'手动移出我的一天的日期',due:'截止日期',done:'完成状态',star:'重要',list:'清单',deleted:'删除状态'};
   const whole=fields.some(f=>['removed','id','deleted'].includes(f));
   for(const [label,value] of [['本机',draft.data],['云端',remote?.data]]){
     const pre=el('pre',whole?(value?JSON.stringify(value,null,2):'任务已移除'):fields.map(f=>(labels[f]||f)+'\n'+(typeof value?.[f]==='string'?value[f]:JSON.stringify(value?.[f],null,2))).join('\n\n'));
@@ -1465,6 +1496,7 @@ async function loadRecords(treeRef=branch,source=device?.confirmed||records,acco
   return next;
 }
 async function refresh(force=false){
+  if(lastRenderDay!==today())render();
   if(!device||busy||refreshing||Date.now()<retryAt||(!force&&Date.now()-lastCheck<3000))return;
   const dev=device,account=config,ticket=epoch;
   refreshing=true;lastCheck=Date.now();
@@ -1490,7 +1522,6 @@ async function refresh(force=false){
       }
       rememberHead(dev,head);
     }
-    if(lastRenderDay!==today())render();
     if(!dev.drafts.size)syncError='';
     status('已同步 · 刷新');scheduleUpload();
   }catch(e){if(dev===device){syncError=e.message;retryAt=Math.max(retryAt,e.retryAt||0);status(e.message)}}
@@ -1533,7 +1564,7 @@ function makeBackup(map) {
   const pick = prefix => [...map].filter(([path]) => path.startsWith(prefix)).map(([, record]) => record.data);
   return {format:backupFormat, version:2, exportedAt:new Date().toISOString(),
     fields:{groups:'Each group has an id and name. Ungrouped groups and deleted lists can carry deleted=true.',lists:'group references groups.id. Empty or absent means ungrouped. In each group, including ungrouped, lists with a nonnegative integer position come first in ascending order from 0. Break ties and order unpositioned lists by Chinese name (numeric collation), then id. The task sort field accepts star, due, day, name, or created (default). Empty groups and lists are retained.',
-      tasks:'list references lists.id. An empty list identifies an unassigned task from an older version. day and due are local YYYY-MM-DD dates. created is Unix milliseconds. done, star, deleted and steps[].done are booleans. Optional repeat: daily, weekdays, weekly, monthly, yearly. repeatAnchor is the calendar reference date.',
+      tasks:'list references lists.id. An empty list identifies an unassigned task from an older version. day and due are local YYYY-MM-DD dates. My Day includes tasks with day equal to today and also open tasks due today unless optional dayDismissed equals today. Exclude deleted tasks and deleted lists. created is Unix milliseconds. done, star, deleted and steps[].done are booleans. Optional repeat: daily, weekdays, weekly, monthly, yearly. repeatAnchor is the calendar reference date.',
       restore:'Write groups, lists and tasks as UTF-8 JSON in groups/{id}.json, lists/{id}.json and tasks/{id}.json in an initialized private data repo. Retain IDs and list links. Independent programs can read the arrays directly.'},
     groups:pick('groups/'), lists:pick('lists/'), tasks:pick('tasks/')};
 }
@@ -1553,7 +1584,7 @@ function readBackup(data) {
     add(listKey(l.id),l);
   }
   for(const t of data.tasks){
-    if(!t||!uuid.test(t.id)||!text(t.title)||!t.title.trim()||!text(t.note)||!text(t.list)||!date(t.day)||!date(t.due)||(t.repeat && !Object.hasOwn(repeatNames,t.repeat))||(t.repeatAnchor && (!date(t.repeatAnchor)||!Number.isFinite(Date.parse(t.repeatAnchor+'T12:00:00'))))||
+    if(!t||!uuid.test(t.id)||!text(t.title)||!t.title.trim()||!text(t.note)||!text(t.list)||!date(t.day)||!date(t.due)||('dayDismissed' in t&&!date(t.dayDismissed))||(t.repeat && !Object.hasOwn(repeatNames,t.repeat))||(t.repeatAnchor && (!date(t.repeatAnchor)||!Number.isFinite(Date.parse(t.repeatAnchor+'T12:00:00'))))||
       !Number.isFinite(t.created)||[t.done,t.star,t.deleted].some(x=>typeof x!=='boolean')||
       !Array.isArray(t.steps)||t.steps.some(s=>!s||!text(s.title)||typeof s.done!=='boolean'))throw Error('任务或步骤格式不完整。');
     if(t.list&&!map.has(listKey(t.list)))throw Error('有任务引用了缺失的清单，未恢复。');
@@ -1564,9 +1595,9 @@ function readBackup(data) {
 function csvData(data) {
   const lists=new Map(data.lists.map(l=>[l.id,l]));
   const groups=new Map((data.groups||[]).map(g=>[g.id,g.name]));
-  const header=['任务编号','清单编号','清单','任务','状态','重要','我的一天','截止日期','创建时间','备注','步骤（JSON）','已删除','重复','重复基准日','组编号','组'];
+  const header=['任务编号','清单编号','清单','任务','状态','重要','我的一天','截止日期','创建时间','备注','步骤（JSON）','已删除','重复','重复基准日','组编号','组','手动移出我的一天的日期'];
   const cell=value=>{let s=String(value??'');if(/^[\s]*[=+@-]|^[\t\r\n]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"'};
-  const rows=data.tasks.map(t=>[t.id,t.list,lists.get(t.list)?.name||'待归类',t.title,t.done?'已完成':'待处理',t.star?'是':'否',t.day,t.due,new Date(t.created).toISOString(),t.note,JSON.stringify(t.steps),t.deleted?'是':'否',repeatNames[t.repeat]||'',t.repeatAnchor||'',lists.get(t.list)?.group||'',groups.get(lists.get(t.list)?.group)||'未分组']);
+  const rows=data.tasks.map(t=>[t.id,t.list,lists.get(t.list)?.name||'待归类',t.title,t.done?'已完成':'待处理',t.star?'是':'否',lists.get(t.list)?.deleted?t.day:myDayDate(t),t.due,new Date(t.created).toISOString(),t.note,JSON.stringify(t.steps),t.deleted?'是':'否',repeatNames[t.repeat]||'',t.repeatAnchor||'',lists.get(t.list)?.group||'',groups.get(lists.get(t.list)?.group)||'未分组',t.dayDismissed||'']);
   return '\ufeff'+[header,...rows].map(r=>r.map(cell).join(',')).join('\r\n');
 }
 function downloadAs(name,mime,content){
@@ -1597,7 +1628,7 @@ function inspectFile(){
     results.replaceChildren();
     const rows=data.tasks.filter(t=>(select.value==='*'||select.value===t.list||select.value==='group:'+incoming.get(listKey(t.list))?.data.group)&&(state.value==='trash'?t.deleted:!t.deleted&&(state.value==='all'||t.done===(state.value==='done'))));
     results.append(el('p',rows.length+' 条任务'));
-    for(const t of rows){const item=el('details'),title=el('summary',t.title),name=incoming.get(listKey(t.list))?.data.name||'待归类';item.append(title,el('p',[name,t.done?'已完成':'待处理',t.star?'重要':'',t.due&&'截止 '+t.due,repeatNames[t.repeat],t.day&&'我的一天 '+t.day].filter(Boolean).join(' · ')),el('p',t.note));for(const step of t.steps)item.append(el('p',(step.done?'✓ ':'○ ')+step.title));results.append(item)}
+    for(const t of rows){const item=el('details'),title=el('summary',t.title),name=incoming.get(listKey(t.list))?.data.name||'待归类';item.append(title,el('p',[name,t.done?'已完成':'待处理',t.star?'重要':'',t.due&&'截止 '+t.due,repeatNames[t.repeat],myDayDate(t)&&'我的一天 '+myDayDate(t)].filter(Boolean).join(' · ')),el('p',t.note));for(const step of t.steps)item.append(el('p',(step.done?'✓ ':'○ ')+step.title));results.append(item)}
   }
   select.onchange=state.onchange=filter;host.append(select,state,results);filter();
 }
