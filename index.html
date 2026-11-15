@@ -96,9 +96,13 @@ html,body{background:#f0f5ff;overscroll-behavior:none}
 .editorHead .mobileBack{display:none}
 .editorBody{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:2px 4px 8px}
 .stepText{display:grid;flex:1;min-width:0}
-.stepText::after,.stepText textarea{grid-area:1/1;box-sizing:border-box;margin:0;padding:8px 6px;border:0;font:inherit;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.stepText::after,.stepText textarea,.stepText .stepLabel{grid-area:1/1;box-sizing:border-box;margin:0;padding:8px 6px;border:0;font:inherit;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
 .stepText::after{content:attr(data-text) " ";visibility:hidden}
 #detail .stepText textarea{min-height:0;height:100%;resize:none;overflow:hidden;background:transparent}
+#detail .stepLabel{width:100%;min-width:0;text-align:left;display:block;color:inherit;background:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
+#detail .stepText [hidden]{display:none}
+#detail .stepLifted{position:relative;z-index:1;border-radius:6px;background:#edf4ff;box-shadow:0 3px 12px #18345a35;pointer-events:none}
+#detail .stepBefore{box-shadow:0 -2px var(--blue)}#detail .stepAfter{box-shadow:0 2px var(--blue)}
 .layerReturn{display:none}
 @media(min-width:751px){
  #detail.taskPanel{width:43.5%;flex:none;padding:12px clamp(14px,1.6vw,28px)}
@@ -942,6 +946,95 @@ function recordEdit(s,key,value){
   queueEdit(s);
 }
 async function openTask(t){if(!await finishEdit())return;const r=records.get(taskKey(t.id));if(!r||r.data.deleted)return;showingPicks=false;mountEditor(r);render()}
+function bindStepDrag(steps,host,moveStep){
+  let drag=null,frame=0,hold=0,ignoreClick=false;
+  function clearMark(){
+    drag.mark?.classList.remove('stepBefore','stepAfter');
+    drag.mark=null;
+  }
+  function paint(){
+    frame=0;
+    if(!drag.row.isConnected){finish(false);return}
+    const d=drag,box=host.getBoundingClientRect();
+    const inPanel=d.x>=box.left&&d.x<=box.right;
+    const edge=Math.min(52,box.height/5);
+    const speed=d.y<box.top+edge?-Math.ceil((box.top+edge-d.y)/4):d.y>box.bottom-edge?Math.ceil((d.y-box.bottom+edge)/4):0;
+    const oldScroll=host.scrollTop;
+    if(inPanel&&speed)host.scrollTop+=Math.max(-14,Math.min(14,speed));
+    d.row.style.transform='translateY('+(d.y-d.startY+host.scrollTop-d.scroll)+'px)';
+    let lo=0,hi=d.others.length;
+    while(lo<hi){
+      const mid=(lo+hi)>>1,r=d.others[mid].getBoundingClientRect();
+      if(d.y<r.top+r.height/2)hi=mid;else lo=mid+1;
+    }
+    d.to=inPanel?lo:d.from;
+    clearMark();
+    if(d.to!==d.from){
+      d.mark=d.others[lo]||d.others.at(-1);
+      d.mark.classList.add(lo<d.others.length?'stepBefore':'stepAfter');
+    }
+    if(host.scrollTop!==oldScroll)frame=requestAnimationFrame(paint);
+  }
+  function activate(){
+    if(!drag||!drag.row.isConnected){finish(false);return}
+    drag.active=true;ignoreClick=true;drag.scroll=host.scrollTop;
+    drag.row.classList.add('stepLifted');
+    frame=requestAnimationFrame(paint);
+  }
+  function begin(e,x,y){
+    if(drag)finish(false);
+    ignoreClick=false;
+    const row=e.target.closest('.step');
+    if(busy||!row||steps.children.length<2||e.target.closest('input,textarea,button:not(.stepLabel)'))return;
+    const rows=[...steps.children];
+    drag={row,from:rows.indexOf(row),others:rows.filter(r=>r!==row),startX:x,startY:y,x,y,active:false};
+  }
+  function travel(x,y,touch){
+    if(!drag)return;
+    drag.x=x;drag.y=y;
+    if(!drag.active&&Math.hypot(x-drag.startX,y-drag.startY)>=7){
+      if(touch){finish(false);return}
+      activate();
+    }
+    if(drag?.active&&!frame)frame=requestAnimationFrame(paint);
+  }
+  function finish(drop){
+    if(!drag)return;
+    clearTimeout(hold);cancelAnimationFrame(frame);frame=0;
+    const d=drag;
+    if(drop&&d.active&&d.row.isConnected){paint();cancelAnimationFrame(frame);frame=0}
+    clearMark();drag=null;d.row.style.transform='';d.row.classList.remove('stepLifted');
+    if(drop&&d.active&&d.row.isConnected&&d.to!==d.from)moveStep(d.from,d.to);
+  }
+  steps.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1){finish(false);return}
+    const t=e.touches[0];begin(e,t.clientX,t.clientY);
+    if(drag)hold=setTimeout(activate,380);
+  },{passive:true});
+  steps.addEventListener('touchmove',e=>{
+    if(!drag)return;
+    if(e.touches.length!==1){finish(false);return}
+    if(drag.active)e.preventDefault();
+    const t=e.touches[0];travel(t.clientX,t.clientY,true);
+  },{passive:false});
+  steps.addEventListener('touchend',e=>{
+    if(drag?.active){e.preventDefault();drag.y=e.changedTouches[0].clientY;drag.x=e.changedTouches[0].clientX}
+    finish(true);
+  },{passive:false});
+  steps.addEventListener('touchcancel',()=>finish(false));
+  steps.onpointerdown=e=>{
+    if(e.pointerType==='touch'||e.button!==0)return;
+    begin(e,e.clientX,e.clientY);
+    if(drag){e.target.setPointerCapture(e.pointerId);drag.pointer=e.pointerId}
+  };
+  steps.onpointermove=e=>{if(drag&&e.pointerId===drag.pointer)travel(e.clientX,e.clientY,false)};
+  steps.onpointerup=e=>{if(drag&&e.pointerId===drag.pointer){drag.y=e.clientY;drag.x=e.clientX;finish(true)}};
+  steps.onlostpointercapture=e=>{if(drag&&e.pointerId===drag.pointer)finish(false)};
+  steps.oncontextmenu=e=>{if(drag||e.target.closest('.stepLabel'))e.preventDefault()};
+  steps.addEventListener('click',e=>{
+    if(ignoreClick&&e.detail){e.preventDefault();e.stopImmediatePropagation();ignoreClick=false}
+  },true);
+}
 function mountEditor(record){
   const t=record.data,s={id:t.id,base:t,dirty:false,patch:{},message:el('small',''),recover:el('div')};
   const panel=$('detail'),sameTask=editing?.id===t.id;
@@ -959,6 +1052,12 @@ function mountEditor(record){
   const line=el('div');line.className='editTitle';line.append(done,title,star);card.append(line);
   const steps=el('div'),draftSteps=structuredClone(t.steps);
   function saveSteps(){recordEdit(s,'steps',structuredClone(draftSteps))}
+  function moveStep(from,to){
+    if(from===to||to<0||to>=draftSteps.length)return;
+    const [step]=draftSteps.splice(from,1);draftSteps.splice(to,0,step);
+    drawSteps();saveSteps();
+  }
+  bindStepDrag(steps,host,moveStep);
   function removeStep(index){
     if(!confirm('删除步骤「'+draftSteps[index].title+'」？'))return;
     draftSteps.splice(index,1);
@@ -970,9 +1069,18 @@ function mountEditor(record){
       const item=el('div');item.className='step';
       const check=el('input');check.type='checkbox';check.checked=step.done;check.setAttribute('aria-label','完成步骤 '+step.title);check.onchange=()=>{step.done=check.checked;saveSteps()};
       const field=el('div');field.className='stepText';field.dataset.text=step.title;
-      const input=el('textarea');input.rows=1;input.value=step.title;input.maxLength=500;input.setAttribute('aria-label','步骤名称');field.append(input);
+      const input=el('textarea');input.rows=1;input.value=step.title;input.maxLength=500;input.setAttribute('aria-label','步骤名称');input.hidden=true;
+      const label=button(step.title,()=>{label.hidden=true;input.hidden=false;input.focus({preventScroll:true})});
+      label.className='stepLabel';label.title='轻点编辑，长按或拖动调整位置';
+      label.onkeydown=e=>{
+        if(e.altKey&&['ArrowUp','ArrowDown'].includes(e.key)){
+          e.preventDefault();const to=i+(e.key==='ArrowUp'?-1:1);
+          if(to>=0&&to<draftSteps.length){moveStep(i,to);steps.children[to].querySelector('.stepLabel').focus()}
+        }
+      };
+      field.append(label,input);
       input.oninput=()=>{field.dataset.text=input.value;if(input.value.trim()){step.title=input.value.trim();recordEdit(s,'steps',structuredClone(draftSteps))}};
-      input.onblur=()=>{input.value=step.title;field.dataset.text=step.title};input.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();queueEdit(s);next.focus()}};
+      input.onblur=()=>{input.value=step.title;field.dataset.text=label.textContent=step.title;input.hidden=true;label.hidden=false};input.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();queueEdit(s);next.focus()}};
       const remove=button('×',()=>removeStep(i));remove.setAttribute('aria-label','移除步骤 '+step.title);item.append(check,field,remove);steps.append(item);
     });
   }

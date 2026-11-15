@@ -9,7 +9,7 @@
 | 新建组、清单、首页、任务去哪了 | [清单与导航](docs/product.md#清单与导航) | `defaultView`、`listHierarchy` |
 | 三点、右键、字体、复制、移出组 | [菜单与外观](docs/product.md#菜单与外观) | `collectionMenu`、`taskMenu`、`menuItem` |
 | 手机状态栏、详情宽度、空白处返回 | [清单与导航](docs/product.md#清单与导航) | `--list-safe-top`、`returnToLayer`、`setDrawer` |
-| 任务详情、步骤删除确认、备注全选、截止日期、计划内、重复 | [任务与日期](docs/product.md#任务与日期) | `mountEditor`、`datePicker`、`plannedBuckets` |
+| 任务详情、步骤拖动排序、步骤删除确认、备注全选、截止日期、计划内、重复 | [任务与日期](docs/product.md#任务与日期) | `mountEditor`、`bindStepDrag`、`datePicker`、`plannedBuckets` |
 | 挪动清单、任务排序、归属、删除后找回 | [关系与排序](docs/data.md#关系与排序) | `placeList`、`compareListPosition`、`compareTasks`、`ungroup`、`removeList` |
 | IndexedDB、本机缓存、打开慢、改动卡顿、两端不同步、令牌、同时编辑 | [同步与令牌](docs/data.md#同步与令牌) | `connect`、`readDevice`、`stageTask`、`refresh`、`commitChanges` |
 | 导出、导入、筛选、换工具恢复 | [备份与恢复](docs/data.md#备份与恢复) | `makeBackup`、`readBackup`、`restoreMissing` |
