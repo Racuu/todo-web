@@ -45,6 +45,14 @@
 #lists .sideRow:hover,#lists .sideRow:focus-within{background:#eef4ff}
 #lists .sideRow:hover>.sideMore,#lists .sideRow:focus-within>.sideMore{opacity:1}
 #lists .sideRow:has(.selected){background:#dfebff}.groupChildren{display:grid;gap:2px;margin-left:16px;border-left:1px solid #d4dfef;padding-left:5px}
+#lists .sideRow>button.listGrip{flex:none;width:38px;min-height:42px;padding:0;justify-content:center;color:#526e92;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#lists .listGrip+.listLink{flex:1;min-width:0;padding-left:0;gap:8px}
+#lists .sideRow:has(.selected)>.listGrip{color:#154dad}
+#lists .sideRow.dragSource{background:var(--pale)}#lists .dragSource>.listGrip{cursor:grabbing}
+#lists .insertBefore{box-shadow:inset 0 2px var(--blue)}#lists .insertAfter{box-shadow:inset 0 -2px var(--blue)}
+#listPositionBox{max-width:390px}#listPositionScope{color:var(--dim);overflow-wrap:anywhere}
+#listPositionForm label{display:grid;gap:6px}#listPositionTarget{width:100%;min-width:0;min-height:44px;padding:8px;color:var(--ink);background:white;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:16px}
+#listPositionForm .positionActions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}#listPositionForm button{min-height:42px;padding:6px 16px}#listPositionForm button:disabled{opacity:.5}
 #lists .groupRow>button:first-child{font-weight:600;padding-left:5px}.groupArrow{width:7px;height:7px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(-45deg);margin:0 1px}
 [aria-expanded=true]>.groupArrow{transform:rotate(45deg)}#lists .inGroupAdd{font-size:14px;color:var(--blue)}
 #groupPath{font-size:13px;color:var(--dim);margin-bottom:3px}.headTools #listOptions{min-width:37px;min-height:34px;justify-content:center}
@@ -135,6 +143,7 @@ html,body{background:#f0f5ff;overscroll-behavior:none}
 <div id="backupView"></div><p id="restoreReport" role="status"></p><div class="actions"><button id="closeArchive">关闭</button></div></dialog>
 <dialog id="conflictBox" aria-label="同步冲突"></dialog><dialog id="setup"><h2>连接私有任务库</h2><p class="muted">手机和电脑填写同一个私有仓库。令牌仅用于访问 GitHub。</p><form id="connect"><label>GitHub 用户名 / 仓库名<input id="repo" placeholder="你的用户名/todo-data" required autocomplete="off"></label><label>共用的细粒度令牌<input type="password" id="token" required autocomplete="off"></label><label><input type="checkbox" id="remember" aria-describedby="rememberHint"> 在这台私人设备上记住令牌</label><p class="muted" id="rememberHint">不勾选也能同步。刷新这个标签页无需重填，关闭后重新打开通常需要再输入令牌。本机保留任务和待同步修改，断开设备可清除已同步缓存。</p><p id="setupError" class="error" role="alert"></p><div class="actions"><button class="primary">连接</button><button type="button" id="dismiss">关闭</button><button type="button" id="forget">断开此设备</button></div></form></dialog>
 <dialog id="listBox"><h2 id="nameHeading">新建清单</h2><form id="listForm"><label><span id="nameLabel">清单名称</span><input id="listName" required maxlength="60"></label><button class="primary" id="nameSave">创建</button><button type="button" id="cancelList">取消</button></form></dialog>
+<dialog id="listPositionBox" aria-labelledby="listPositionHeading"><h2 id="listPositionHeading">调整清单位置</h2><p id="listPositionScope"></p><form id="listPositionForm"><label>移动到<select id="listPositionTarget"></select></label><div class="positionActions"><button id="cancelPosition" type="button">取消</button><button class="primary" id="applyPosition">移动</button></div></form></dialog>
 <script>
 'use strict';
 const $=id=>document.getElementById(id), el=(tag,txt)=>{const e=document.createElement(tag);if(txt!==undefined)e.textContent=txt;return e};
@@ -267,7 +276,7 @@ function nextDue(task,base=today()){
   return next;
 }
 // One fast-forward commit keeps the completed occurrence and the next due task together.
-async function commitChanges(changes,message,scope,parents=[]){
+async function commitChanges(changes,message,scope,parents=[],scopePrefix=''){
   await verifyPrivate();
   const ref='/git/ref/heads/'+branch.split('/').map(encodeURIComponent).join('/');
   const head=(await api(ref)).object.sha,base=(await api('/git/commits/'+head)).tree.sha;
@@ -280,7 +289,8 @@ async function commitChanges(changes,message,scope,parents=[]){
     if(!r||r.data.deleted||r.sha!==versions.get(p))throw Error('目标组或清单已改变，请刷新后重试。');
   }
   if(scope){
-    const remote=await loadRecords(base);
+    const scopedTree=scopePrefix?{...snapshot,tree:snapshot.tree.filter(f=>f.path.startsWith(scopePrefix))}:snapshot;
+    const remote=await loadRecords(base,device.confirmed,config,scopedTree);
     const sameMembers=(map,other)=>[...map].every(([p,r])=>!scope(p,r.data)||other.get(p)?.sha===r.sha);
     if(!sameMembers(remote,records)||!sameMembers(records,remote))throw Error('组或清单的内容已改变，请刷新后重试。');
   }
@@ -315,6 +325,7 @@ const uiIcons={
  folder:'M3 6h7l2 3h9v11H3z',plus:'M12 4v16M4 12h16',rename:'M3 6h7m4 0h7v12h-7m-4 0H3V6 M10 3h4m-2 0v18m-2 0h4',
  copy:'M8 7h12v14H8z M5 17H3V3h12v2',ungroup:'M8 4H4v4m0 3v3m0 3v3h4m3 0h3m3 0h3v-4m0-3v-3m0-3V4h-4m-3 0h-3',
  sort:'M7 4v15m-4-4 4 4 4-4m6 5V5m-4 4 4-4 4 4',
+ first:'M4 4h16M12 20V9m-6 6 6-6 6 6',
  star:glyphs.star,list:glyphs.list,
  done:'M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0 M7.5 12l3 3 6-6',
  move:'M10 3v9m-3-3 3 3 3-3M3 15h3v3H3z M9 16.5h12 M3 21h3m3 0h12',
@@ -476,6 +487,69 @@ const sortLabels={star:'重要性',due:'到期日期',day:'已添加到“我的
 const nameCompare=(a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true})||a.id.localeCompare(b.id);
 const sortedGroups=()=>entries('groups').filter(g=>!g.deleted).sort(nameCompare);
 const collapsedGroups=new Set();
+const hasListPosition=l=>Number.isSafeInteger(l.position)&&l.position>=0;
+function compareListPosition(a,b){
+  const rankedA=hasListPosition(a),rankedB=hasListPosition(b);
+  if(rankedA!==rankedB)return rankedA?-1:1;
+  return (rankedA&&a.position-b.position)||nameCompare(a,b);
+}
+function listGroupId(list){
+  const group=records.get(groupKey(list.group))?.data;
+  return group&&!group.deleted?group.id:'';
+}
+function listPlacement(id){
+  const list=records.get(listKey(id))?.data;
+  if(!list||list.deleted)return null;
+  const group=listGroupId(list);
+  const peers=entries('lists').filter(l=>!l.deleted&&listGroupId(l)===group).sort(compareListPosition);
+  return {id,group,peers};
+}
+async function placeList(shown,beforeId){
+  if(!shown||busy||!await finishEdit()||busy)return;
+  const {id,group,peers}=shown,from=peers.findIndex(l=>l.id===id),ordered=peers.filter(l=>l.id!==id);
+  const to=beforeId===null?ordered.length:ordered.findIndex(l=>l.id===beforeId);
+  if(from<0||to<0||from===to)return;
+  ordered.splice(to,0,peers[from]);
+  const rowFor=l=>$('lists').querySelector('[data-list-id="'+CSS.escape(l.id)+'"]');
+  const row=rowFor(peers[from]),neighbor=rowFor(ordered[to+1]||ordered[to-1]);
+  const returnFocus=row?.contains(document.activeElement);
+  if(row&&neighbor&&row.parentNode===neighbor.parentNode){
+    if(ordered[to+1])neighbor.before(row);else neighbor.after(row);
+    if(row.offsetWidth)row.scrollIntoView({block:'nearest'});
+  }
+  let saved=false;
+  await change(async()=>{
+    const current=listPlacement(id);
+    if(!current||current.group!==group||current.peers.length!==peers.length||current.peers.some((l,i)=>l.id!==peers[i].id))
+      throw Error('清单位置已变化，请刷新后重新选择。');
+    // The unranked suffix already follows name order. Leave those files untouched.
+    const end=Math.max(to,ordered.findLastIndex(l=>hasListPosition(records.get(listKey(l.id)).data)));
+    const changes=[];
+    for(let i=0;i<=end;i++){
+      const l=records.get(listKey(ordered[i].id)).data;
+      if(l.position!==i)changes.push(recordChange(listKey(l.id),{...l,position:i}));
+    }
+    await commitChanges(changes,'调整清单位置',(p,l)=>p.startsWith('lists/')&&!l.deleted&&listGroupId(l)===group,group?[groupKey(group)]:[],'lists/');
+    saved=true;notifyAction('「'+ordered[to].name+'」已移到第 '+(to+1)+' 位');
+  });
+  if(!saved)render();
+  if(returnFocus)rowFor(peers[from])?.querySelector('.listGrip')?.focus({preventScroll:true});
+}
+function chooseListPosition(shown){
+  if(!shown||shown.peers.length<2||busy)return;
+  const {id,group,peers}=shown,at=peers.findIndex(l=>l.id===id),others=peers.filter(l=>l.id!==id);
+  const box=$('listPositionBox'),target=$('listPositionTarget'),ok=$('applyPosition');
+  const scope=group?'「'+records.get(groupKey(group)).data.name+'」组':'未分组清单';
+  $('listPositionScope').textContent='「'+peers[at].name+'」在'+scope+'中排第 '+(at+1)+' 位，共 '+peers.length+' 张清单。';
+  target.replaceChildren(...peers.map((_,i)=>{
+    const text=others[i]?'排在「'+others[i].name+'」前':'最后一位';
+    return new Option('第 '+(i+1)+' 位 · '+text,others[i]?.id||'');
+  }));
+  target.selectedIndex=at;ok.disabled=true;target.onchange=()=>{ok.disabled=target.selectedIndex===at};
+  $('cancelPosition').onclick=()=>box.close();
+  $('listPositionForm').onsubmit=e=>{e.preventDefault();if(!ok.disabled){box.close();placeList(shown,target.value||null)}};
+  box.showModal();target.focus();
+}
 function compareTasks(mode){
   const day=today();
   return (a,b)=>{
@@ -494,8 +568,65 @@ function groupedName(l,map=records){
   const group=map.get(groupKey(l.group))?.data;
   return group&&!group.deleted?group.name+' / '+l.name:l.name;
 }
+function addListGrip(row,link,id){
+  let dragged=false;
+  const grip=button('',e=>{if(!dragged||!e.detail)chooseListPosition(listPlacement(id));dragged=false});
+  grip.className='listGrip';grip.title='拖动或点击调整清单位置';
+  grip.setAttribute('aria-label','调整「'+listTitle(id)+'」的位置');grip.setAttribute('aria-haspopup','dialog');
+  grip.append(link.firstElementChild);row.prepend(grip);
+  grip.onpointerdown=start=>{
+    if(!start.isPrimary||start.button!==0||busy)return;
+    dragged=false;
+    const pointer=start.pointerId,side=$('side'),shown=listPlacement(id);
+    const rows=[...row.parentNode.children].filter(r=>r.hasAttribute('data-list-id'));
+    let y=start.clientY,x=start.clientX,frame=0,mark=null,before,ended=false;
+    function clearMark(){if(mark)mark.classList.remove('insertBefore','insertAfter');mark=null;before=undefined}
+    function hitTest(){
+      clearMark();
+      const first=rows[0].getBoundingClientRect(),last=rows.at(-1).getBoundingClientRect();
+      if(x<first.left-4||x>last.right+4||y<first.top-6||y>last.bottom+6)return;
+      const others=rows.filter(r=>r!==row);
+      const next=others.find(r=>{const box=r.getBoundingClientRect();return y<box.top+box.height/2});
+      before=next?.dataset.listId||null;mark=next||others.at(-1);
+      mark.classList.add(next?'insertBefore':'insertAfter');
+    }
+    function track(){
+      frame=0;
+      if(!row.isConnected){stop();return}
+      const bounds=side.getBoundingClientRect(),edge=48;
+      const dy=y<bounds.top+edge?-Math.min(12,(bounds.top+edge-y)/3):y>bounds.bottom-edge?Math.min(12,(y-bounds.bottom+edge)/3):0;
+      const old=side.scrollTop;
+      if(dy&&x>=bounds.left&&x<=bounds.right)side.scrollTop+=dy;
+      hitTest();
+      if(side.scrollTop!==old)frame=requestAnimationFrame(track);
+    }
+    function stop(){
+      ended=true;cancelAnimationFrame(frame);clearMark();row.classList.remove('dragSource');
+      grip.onpointermove=grip.onpointerup=grip.onpointercancel=grip.onlostpointercapture=null;
+      document.removeEventListener('keydown',cancelKey,true);
+      if(grip.hasPointerCapture(pointer))grip.releasePointerCapture(pointer);
+    }
+    function cancelKey(e){if(e.key==='Escape'){e.preventDefault();dragged=true;stop()}}
+    grip.setPointerCapture(pointer);
+    document.addEventListener('keydown',cancelKey,true);
+    grip.onpointermove=e=>{
+      if(e.pointerId!==pointer||ended)return;
+      x=e.clientX;y=e.clientY;
+      if(!dragged&&Math.hypot(x-start.clientX,y-start.clientY)<6)return;
+      dragged=true;row.classList.add('dragSource');
+      if(!frame)frame=requestAnimationFrame(track);
+    };
+    grip.onpointerup=e=>{
+      if(e.pointerId!==pointer)return;
+      if(dragged){x=e.clientX;y=e.clientY;hitTest()}
+      const target=before;stop();
+      if(dragged&&target!==undefined)placeList(shown,target);
+    };
+    grip.onpointercancel=grip.onlostpointercapture=stop;
+  };
+}
 function listHierarchy(host,lists,addNav){
-  const groups=sortedGroups(),knownGroups=new Set(groups.map(g=>g.id));
+  const groups=sortedGroups(),ordered=lists.slice().sort(compareListPosition);
   function toolsFor(row,kind,data){
     const open=point=>collectionMenu(kind,data.id,point);
     const more=button('⋯',e=>open(menuPoint(e.currentTarget)));
@@ -508,14 +639,16 @@ function listHierarchy(host,lists,addNav){
       if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){e.preventDefault();open(menuPoint(row))}
     };
   }
-  function listRow(parent,l){
-    const r=el('div');r.className='sideRow';addNav(r,'list:'+l.id,l.name);
+  function listRow(parent,l,movable){
+    const r=el('div');r.className='sideRow';r.dataset.listId=l.id;addNav(r,'list:'+l.id,l.name);
+    const link=r.firstElementChild;link.classList.add('listLink');
+    if(movable)addListGrip(r,link,l.id);
     toolsFor(r,'list',l);parent.append(r);
   }
   for(const g of groups){
     const wrap=el('section'),row=el('div'),children=el('div');
     wrap.className='listGroup';row.className='sideRow groupRow';children.className='groupChildren';
-    const members=lists.filter(l=>l.group===g.id);
+    const members=ordered.filter(l=>l.group===g.id);
     const toggle=button('',()=>{
       if(collapsedGroups.has(g.id))collapsedGroups.delete(g.id);else collapsedGroups.add(g.id);
       syncGroup();
@@ -523,11 +656,12 @@ function listHierarchy(host,lists,addNav){
     const arrow=el('span');arrow.className='groupArrow';arrow.setAttribute('aria-hidden','true');
     function syncGroup(){const expanded=!collapsedGroups.has(g.id);toggle.setAttribute('aria-expanded',String(expanded));children.hidden=!expanded}
     toggle.append(arrow,makeIcon('folder'),el('span',g.name));row.append(toggle);toolsFor(row,'group',g);
-    members.forEach(l=>listRow(children,l));
+    members.forEach(l=>listRow(children,l,members.length>1));
     if(!members.length){const add=button('＋ 新建清单',()=>nameDialog('list','',g.id));add.className='inGroupAdd';children.append(add)}
     syncGroup();wrap.append(row,children);host.append(wrap);
   }
-  lists.filter(l=>!knownGroups.has(l.group)).forEach(l=>listRow(host,l));
+  const ungrouped=ordered.filter(l=>!listGroupId(l));
+  ungrouped.forEach(l=>listRow(host,l,ungrouped.length>1));
 }
 function menuPoint(anchor){const r=anchor.getBoundingClientRect();return{x:r.left,y:r.bottom+3}}
 function positionMenu(menu,point){
@@ -576,14 +710,18 @@ async function editList(id,patch){
   if(!await finishEdit())return;
   await change(async()=>{
     const path=listKey(id),r=records.get(path);if(!r||r.data.deleted)return;
-    await storeFile(path,{...r.data,...patch},r.sha);if(patch.group)collapsedGroups.delete(patch.group);
+    const data={...r.data,...patch};
+    if('group' in patch&&patch.group!==r.data.group)delete data.position;
+    await storeFile(path,data,r.sha);if(patch.group)collapsedGroups.delete(patch.group);
   });
 }
 async function ungroup(id){
   const g=records.get(groupKey(id))?.data;
   if(!g||g.deleted||!confirm('取消「'+g.name+'」的分组？组内清单和任务会保留在侧栏。')||!await finishEdit())return;
   await change(async()=>{
-    const changes=sortedLists().filter(l=>l.group===id).map(l=>recordChange(listKey(l.id),{...l,group:''}));
+    const changes=sortedLists().filter(l=>l.group===id).map(l=>{
+      const next={...l,group:''};delete next.position;return recordChange(listKey(l.id),next);
+    });
     changes.push(recordChange(groupKey(id),{...g,deleted:true}));
     await commitChanges(changes,'取消清单分组',(p,d)=>p.startsWith('lists/')&&!d.deleted&&d.group===id);
   });
@@ -595,6 +733,7 @@ async function copyList(id){
     const allNames=new Set(sortedLists().map(l=>l.name));
     let name=source.name+'（副本）',i=2;while(allNames.has(name))name=source.name+'（副本 '+i+++'）';
     const copy={...source,id:crypto.randomUUID(),name};
+    delete copy.position;
     const changes=[recordChange(listKey(copy.id),copy)];
     for(const t of entries('tasks').filter(t=>!t.deleted&&t.list===id)){
       const clone={...t,id:crypto.randomUUID(),list:copy.id};
@@ -645,6 +784,12 @@ function collectionMenu(kind,id,point,header=false){
     item('取消分组','ungroup',()=>ungroup(id));
   }else{
     item('重命名清单','rename',()=>nameDialog('list',id),'F2');
+    const placement=listPlacement(id);
+    if(placement.peers.length>1){
+      const first=placement.peers[0].id;
+      item('移到首位','first',()=>placeList(placement,first)).disabled=first===id;
+      item('调整清单位置…','sort',()=>chooseListPosition(placement));
+    }
     section('将清单移动到…','move',()=>{
       for(const g of sortedGroups()){
         const b=menuItem(sub,g.name,'folder',()=>execute(()=>editList(id,{group:g.id})));
@@ -1166,8 +1311,8 @@ function showConflict(){
   box.append(button('使用本机版本',()=>chooseVersion(true)),button('使用云端版本',()=>chooseVersion(false)),button('稍后处理',()=>box.close()));box.showModal();return true;
 }
 
-async function loadRecords(treeRef=branch,source=device?.confirmed||records,account=config){
-  const tree=await api('/git/trees/'+encodeURIComponent(treeRef)+'?recursive=1',{},account);
+async function loadRecords(treeRef=branch,source=device?.confirmed||records,account=config,snapshot=null){
+  const tree=snapshot||await api('/git/trees/'+encodeURIComponent(treeRef)+'?recursive=1',{},account);
   if(tree.truncated)throw Error('仓库文件过多，无法完整载入。');
   const files=tree.tree.filter(f=>f.type==='blob'&&/^(groups|lists|tasks)\/[a-f\d-]{36}\.json$/.test(f.path));
   const next=new Map(),missing=[];
@@ -1276,7 +1421,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function makeBackup(map) {
   const pick = prefix => [...map].filter(([path]) => path.startsWith(prefix)).map(([, record]) => record.data);
   return {format:backupFormat, version:2, exportedAt:new Date().toISOString(),
-    fields:{groups:'Each group has an id and name. Ungrouped groups and deleted lists can carry deleted=true.',lists:'group references groups.id; empty or absent means ungrouped. sort is star, due, day, name, or created (default). Empty groups and lists are retained.',
+    fields:{groups:'Each group has an id and name. Ungrouped groups and deleted lists can carry deleted=true.',lists:'group references groups.id. Empty or absent means ungrouped. In each group, including ungrouped, lists with a nonnegative integer position come first in ascending order from 0. Break ties and order unpositioned lists by Chinese name (numeric collation), then id. The task sort field accepts star, due, day, name, or created (default). Empty groups and lists are retained.',
       tasks:'list references lists.id. An empty list identifies an unassigned task from an older version. day and due are local YYYY-MM-DD dates. created is Unix milliseconds. done, star, deleted and steps[].done are booleans. Optional repeat: daily, weekdays, weekly, monthly, yearly. repeatAnchor is the calendar reference date.',
       restore:'Write groups, lists and tasks as UTF-8 JSON in groups/{id}.json, lists/{id}.json and tasks/{id}.json in an initialized private data repo. Retain IDs and list links. Independent programs can read the arrays directly.'},
     groups:pick('groups/'), lists:pick('lists/'), tasks:pick('tasks/')};
@@ -1293,6 +1438,7 @@ function readBackup(data) {
     if(l?.group&&!map.has(groupKey(l.group)))throw Error('有清单引用了缺失的组。');
     if(l?.sort&&!Object.hasOwn(sortLabels,l.sort))throw Error('清单排序无效。');
     if(!l||!uuid.test(l.id)||!text(l.name)||!l.name.trim())throw Error('清单名称或编号无效。');
+    if('position' in l&&!hasListPosition(l))throw Error('清单位置必须是非负整数。');
     add(listKey(l.id),l);
   }
   for(const t of data.tasks){
