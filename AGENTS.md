@@ -9,7 +9,7 @@
 | 新建组、清单、首页、任务去哪了 | [清单与导航](docs/product.md#清单与导航) | `defaultView`、`listHierarchy` |
 | 三点、右键、字体、复制、移出组 | [菜单与外观](docs/product.md#菜单与外观) | `collectionMenu`、`taskMenu`、`menuItem` |
 | 任务详情、截止日期、计划内、重复 | [任务与日期](docs/product.md#任务与日期) | `mountEditor`、`datePicker`、`plannedBuckets` |
-| 排序、归属、删除后找回 | [关系与排序](docs/data.md#关系与排序) | `compareTasks`、`ungroup`、`removeList` |
+| 挪动清单、任务排序、归属、删除后找回 | [关系与排序](docs/data.md#关系与排序) | `placeList`、`compareListPosition`、`compareTasks`、`ungroup`、`removeList` |
 | 两端不同步、令牌、同时编辑 | [同步与令牌](docs/data.md#同步与令牌) | `connect`、`refresh`、`commitChanges` |
 | 导出、导入、筛选、换工具恢复 | [备份与恢复](docs/data.md#备份与恢复) | `makeBackup`、`readBackup`、`restoreMissing` |
 | 验证、上线、回退、接着上次做 | [维护与交接](docs/maintenance.md) | 选相应小节；接续未完成工作时查看根目录是否有 `HANDOFF.md` |
