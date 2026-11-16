@@ -437,7 +437,7 @@ async function updateTask(id,patch,undoLabel){
     if(patch.due===day){
       patch={...patch,day};
       if(task.dayDismissed)patch.dayDismissed='';
-    }else if('due' in patch&&task.due===day){
+    }else if('due' in patch&&(task.due===day||(patch.due&&task.day===day))){
       patch={...patch,day:''};
       if(task.dayDismissed)patch.dayDismissed='';
     }else if(patch.done===true&&myDayDate(task,day)===day&&task.day!==day){
