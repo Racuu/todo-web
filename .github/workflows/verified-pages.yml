@@ -1,0 +1,40 @@
+name: Verify and publish To Doo
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 verify-index.py
+      - run: npm install --prefix "$RUNNER_TEMP/todoo-checks" --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
+      - run: NODE_PATH="$RUNNER_TEMP/todoo-checks/node_modules" node verify-my-day.cjs
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.release.outputs.page_url }}
+    steps:
+      - id: release
+        uses: actions/deploy-pages@v4
