@@ -37,6 +37,23 @@ async function run() {
     await page.getByRole('button',{name:'今天到期'}).click();
     await day.click();
     await task('详情用例').waitFor();
+    const titles = rows.locator('.title > span');
+    const before = await titles.allTextContents();
+    const first = await rows.first().locator('.title').boundingBox();
+    const last = await rows.last().locator('.title').boundingBox();
+    const x = last.x + last.width / 2;
+    await page.mouse.move(x, last.y + last.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, first.y + 2, {steps:10});
+    await page.mouse.up();
+    const moved = before[1];
+    await page.waitForFunction(name => document.querySelector('#rows .title > span')?.textContent === name,moved);
+    await page.reload();
+    await task('右键用例').waitFor();
+    assert.deepEqual(await titles.allTextContents(),before,'我的一天拖动影响原清单');
+    await day.click();
+    await task('右键用例').waitFor();
+    assert.deepEqual(await titles.allTextContents(),before.slice().reverse(),'拖动位置没有保存');
     await task('右键用例').locator('.title').click();
     await page.getByRole('button',{name:'已添加到“我的一天”'}).click();
     await task('右键用例').waitFor({state:'detached'});
@@ -45,7 +62,23 @@ async function run() {
     await day.click();
     await task('详情用例').waitFor();
     assert.equal(await rows.count(), 1, '手动移出的任务刷新后被重新加入');
-    console.log('详情、右键和刷新后的我的一天通过');
+    await task('详情用例').locator('.title').click();
+    // Match the narrow center pane between the sidebar and the open detail pane.
+    await page.setViewportSize({width:1100,height:780});
+    const widths = await task('详情用例').evaluate(row => ({
+      row:row.clientWidth, title:row.querySelector('.title').clientWidth
+    }));
+    assert.ok(widths.row - widths.title <= 78,'操作按钮占用过多标题宽度');
+    await page.getByRole('button',{name:'截止于 今天'}).click();
+    await page.locator('#scheduleMenu button').filter({hasText:'明天'}).click();
+    await task('详情用例').waitFor({state:'detached'});
+    await page.getByRole('button',{name:'添加到“我的一天”',exact:true}).waitFor();
+    await page.reload();
+    await task('详情用例').waitFor();
+    assert.match(await task('详情用例').innerText(),/截止 明天/);
+    await day.click();
+    assert.equal(await rows.count(),0,'改期后刷新仍留在我的一天');
+    console.log('日期联动、手动移出、任务拖动、刷新持久化和窄栏布局通过');
   } finally {
     await browser.close();
   }

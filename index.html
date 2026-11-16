@@ -109,10 +109,10 @@ html,body{background:#f0f5ff;overscroll-behavior:none}
 #detail .stepText textarea{min-height:0;height:100%;resize:none;overflow:hidden;background:transparent}
 #detail .stepLabel{width:100%;min-width:0;text-align:left;display:block;color:inherit;background:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
 #detail .stepText [hidden]{display:none}
-#detail .stepLifted{position:relative;z-index:1;border-radius:6px;background:#edf4ff;box-shadow:0 3px 12px #18345a35;pointer-events:none}
-#detail .stepBefore,#detail .stepAfter{position:relative}
-#detail .stepBefore::before,#detail .stepAfter::after{content:"";position:absolute;left:0;right:0;height:2px;border-radius:2px;background:var(--blue);z-index:2;pointer-events:none}
-#detail .stepBefore::before{top:-2px}#detail .stepAfter::after{bottom:-2px}
+:is(#detail,#rows) .stepLifted{position:relative;z-index:1;border-radius:6px;background:#edf4ff;box-shadow:0 3px 12px #18345a35;pointer-events:none}
+:is(#detail,#rows) .stepBefore,:is(#detail,#rows) .stepAfter{position:relative}
+:is(#detail,#rows) .stepBefore::before,:is(#detail,#rows) .stepAfter::after{content:"";position:absolute;left:0;right:0;height:2px;border-radius:2px;background:var(--blue);z-index:2;pointer-events:none}
+:is(#detail,#rows) .stepBefore::before{top:-2px}:is(#detail,#rows) .stepAfter::after{bottom:-2px}
 .layerReturn{display:none}
 @media(min-width:751px){
  #detail.taskPanel{width:43.5%;flex:none;padding:12px clamp(14px,1.6vw,28px)}
@@ -131,6 +131,21 @@ html,body{background:#f0f5ff;overscroll-behavior:none}
  #app>.layerReturn{position:fixed;inset:0;display:block;padding:0;border:0;border-radius:0;background:#1b385623;z-index:3}
  #app>.layerReturn[hidden]{display:none}
  .side.open{width:min(320px,calc(100% - var(--layer-edge)));box-shadow:2px 0 12px #163d6420}
+}
+.rows article,.rows article .title{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.rows .title{cursor:grab}
+.rows{container-type:inline-size}
+@media(min-width:1031px){
+ #app:has(.taskPanel:not([hidden])) .workspace{padding-inline:clamp(8px,1.2vw,20px)}
+}
+@container(max-width:510px){
+ .rows article{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;grid-template-rows:auto auto;gap:0 2px;padding:3px}
+ .rows article>.circle,.rows article>.title{grid-row:1/3}
+ .rows article>.circle{grid-column:1;width:32px}
+ .rows article>.title{grid-column:2;width:100%;padding-inline:3px}
+ .rows article>.star,.rows article>.rowMore{grid-column:3;width:32px;height:28px;padding:0}
+ .rows article>.star{grid-row:1;align-self:end}
+ .rows article>.rowMore{grid-row:2;align-self:start}
 }
 </style>
 <div id="app">
@@ -284,7 +299,7 @@ function renderPlanned(host,tasks){
     const subset=tasks.filter(t=>group.accept(t.due));if(!subset.length)continue;
     const part=el('details');part.className='planGroup';part.open=planExpansion.get(group.id)??false;
     const header=el('summary');header.append(el('span',group.title),el('small',subset.length));
-    part.append(header,...subset.map(row));
+    part.append(header,...subset.map(row));bindTaskRows(part,subset);
     part.ontoggle=()=>{if(part.isConnected)planExpansion.set(group.id,part.open)};
     host.append(part);
   }
@@ -416,12 +431,16 @@ async function updateTask(id,patch,undoLabel){
   if(patch.done===true&&!current.data.done&&repeatNames[current.data.repeat])return change(()=>completeRepeating(records.get(key)));
   if('due' in patch && current.data.repeat && !('repeatAnchor' in patch))patch={...patch,repeatAnchor:patch.due};
   const day=today(),task=current.data;
+  if('list' in patch&&patch.list!==task.list&&task.listRank)patch={...patch,listRank:''};
+  if('due' in patch&&patch.due!==task.due&&task.planRank)patch={...patch,planRank:''};
   if(!('day' in patch)&&!task.done){
     if(patch.due===day){
       patch={...patch,day};
       if(task.dayDismissed)patch.dayDismissed='';
-    }else if((patch.done===true||'due' in patch)&&myDayDate(task,day)===day&&task.day!==day){
-      // Keep today's entry when completing or rescheduling an automatically included task.
+    }else if('due' in patch&&task.due===day){
+      patch={...patch,day:''};
+      if(task.dayDismissed)patch.dayDismissed='';
+    }else if(patch.done===true&&myDayDate(task,day)===day&&task.day!==day){
       patch={...patch,day};
     }
   }
@@ -519,7 +538,7 @@ function taskMenu(t,anchor){
   menu.onclick=e=>dismissOutside(menu,e);
   menu.showModal();main(false);menu.focus();
 }
-const sortLabels={star:'重要性',due:'到期日期',day:'已添加到“我的一天”',name:'字母顺序',created:'创建日期'};
+const sortLabels={manual:'手动排序',star:'重要性',due:'到期日期',day:'已添加到“我的一天”',name:'字母顺序',created:'创建日期'};
 const nameCompare=(a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true})||a.id.localeCompare(b.id);
 const sortedGroups=()=>entries('groups').filter(g=>!g.deleted).sort(nameCompare);
 const collapsedGroups=new Set();
@@ -596,6 +615,38 @@ function compareTasks(mode){
     if(mode==='name')n=a.title.localeCompare(b.title,'zh-CN',{numeric:true});
     return n||b.created-a.created||a.id.localeCompare(b.id);
   };
+}
+function taskRankField(viewId){
+  return viewId.startsWith('list:')?'listRank':viewId+'Rank';
+}
+function taskRank(task,field){
+  const time=(Number.MAX_SAFE_INTEGER-task.created).toString(16).padStart(14,'0');
+  const date=field==='planRank'?(task.due||'').replaceAll('-',''):'';
+  return (typeof task[field]==='string'&&/^[0-9a-f]+$/.test(task[field])?task[field]:date+time)+task.id.replaceAll('-','')+'8';
+}
+// Pick a hex prefix strictly between two keys. An ID suffix breaks ties across devices.
+function rankBetween(lower,upper){
+  let prefix='';
+  for(let i=0;;i++){
+    const a=parseInt(lower[i]||'0',16),b=parseInt(upper[i]||'f',16);
+    if(b-a>1)return prefix+Math.floor((a+b)/2).toString(16);
+    prefix+=a.toString(16);
+    if(a<b)upper='';
+  }
+}
+function bindTaskRows(group,tasks){
+  const field=taskRankField(view);
+  function move(from,to,rows){
+    const sort=records.get(listKey(activeListId()))?.data.sort;
+    if(sort&&sort!=='manual'){notifyAction('请在清单的「排序依据」中选择「手动排序」');return}
+    const id=rows[from].dataset.taskId,target=rows[to].dataset.taskId;
+    const rest=tasks.filter(t=>t.id!==id);
+    const index=rest.findIndex(t=>t.id===target)+(from<to?1:0);
+    const lower=index?taskRank(rest[index-1],field):'';
+    const upper=index<rest.length?taskRank(rest[index],field):'';
+    return updateTask(id,{[field]:rankBetween(lower,upper)});
+  }
+  bindRowDrag(group,$('rows'),move,'article','.title');
 }
 function recordChange(path,data){
   return {path,data,expected:records.get(path)?.sha};
@@ -841,8 +892,8 @@ function collectionMenu(kind,id,point,header=false){
       section('排序依据','sort',()=>{
         for(const [mode,label] of Object.entries(sortLabels)){
           const b=menuItem(sub,label,sortIcons[mode],()=>execute(()=>editList(id,{sort:mode})));
-          b.setAttribute('aria-pressed',String((rec.sort||'created')===mode));
-          if((rec.sort||'created')===mode)b.append(el('small','✓'));
+          b.setAttribute('aria-pressed',String((rec.sort||'manual')===mode));
+          if((rec.sort||'manual')===mode)b.append(el('small','✓'));
         }
       });
     }
@@ -860,12 +911,12 @@ function collectionMenu(kind,id,point,header=false){
   };
   menu.onclick=e=>dismissOutside(menu,e);menu.showModal();positionMenu(menu,point);menu.focus();
 }
-const sortIcons={star:'star',due:'date',day:'day',name:'sort',created:'today'};
+const sortIcons={manual:'sort',star:'star',due:'date',day:'day',name:'sort',created:'today'};
 
 function row(t){
   const a=el('article');a.dataset.taskId=t.id;a.classList.toggle('activeRow',editing?.id===t.id);
   const done=iconToggle(t.done?'恢复待办':'标记完成',t.done,'circle',()=>updateTask(t.id,{done:!t.done},t.done?'已恢复待办':'任务已完成'));
-  const title=button('',()=>openTask(t));title.className='title';
+  const title=button('',()=>openTask(t));title.className='title';title.title='点击打开，长按或拖动调整顺序';
   const name=el('span',t.title);if(t.done)name.className='checked';title.append(name);
   const sub=[(view==='list:'+t.list||view==='legacy')?'':listTitle(t.list),view!=='day'&&myDayDate(t)===today()?'我的一天':'',t.due?'截止 '+dueName(t.due):'',t.steps.length?t.steps.filter(s=>s.done).length+'/'+t.steps.length+' 步':''].filter(Boolean);
   if(sub.length)title.append(el('small',sub.join(' · ')));
@@ -879,7 +930,9 @@ function row(t){
 let visibleRowLimit=80,rowObserver=null;
 function appendTaskRows(host,tasks){
   const batch=visibleRowLimit;
-  host.append(...tasks.slice(0,batch).map(row));
+  if(!tasks.length)return;
+  const group=el('div');host.append(group);
+  group.append(...tasks.slice(0,batch).map(row));bindTaskRows(group,tasks);
   if(tasks.length<=batch)return;
   let shown=batch;
   const more=button('',()=>{
@@ -888,7 +941,7 @@ function appendTaskRows(host,tasks){
     more.before(part);shown=end;visibleRowLimit=end;
     if(shown===tasks.length)more.remove();else more.textContent='显示更多任务（剩余 '+(tasks.length-shown)+'）';
   });
-  more.textContent='显示更多任务（剩余 '+(tasks.length-shown)+'）';host.append(more);
+  more.textContent='显示更多任务（剩余 '+(tasks.length-shown)+'）';group.append(more);
   if('IntersectionObserver' in window){
     rowObserver=new IntersectionObserver(items=>{if(more.isConnected&&items.some(i=>i.isIntersecting))more.click()},{root:host,rootMargin:'180px'});
     rowObserver.observe(more);
@@ -907,8 +960,12 @@ function render(){
     draftList=currentList;$('quick').value=taskDrafts.get(currentList)||'';
   }
   const current=records.get(listKey(currentList))?.data;
-  if(current)matches.sort(compareTasks(current.sort||'created'));
-  else matches.sort((a,b)=>view==='plan'?a.due.localeCompare(b.due)||b.created-a.created:b.created-a.created);
+  const rankField=taskRankField(view);
+  if(current?.sort&&current.sort!=='manual')matches.sort(compareTasks(current.sort));
+  else matches.sort((a,b)=>{
+    const left=taskRank(a,rankField),right=taskRank(b,rankField);
+    return left<right?-1:left>right?1:0;
+  });
   const parent=current?.group&&records.get(groupKey(current.group))?.data;
   $('groupPath').hidden=!parent||!!parent.deleted;$('groupPath').textContent=parent&&!parent.deleted?parent.name:'';
   $('listOptions').hidden=!currentList;
@@ -944,7 +1001,7 @@ function render(){
   const activeTasks=matches.filter(t=>!t.done);
   if(view==='plan')renderPlanned(host,activeTasks);else appendTaskRows(host,activeTasks);
   const done=matches.filter(t=>t.done);
-  if(done.length){const d=el('details');d.className='completedGroup';d.open=!!expanded;d.append(el('summary','已完成 · '+done.length));const fill=()=>{if(d.open&&d.children.length===1)d.append(...done.map(row))};d.ontoggle=fill;fill();host.append(d)}
+  if(done.length){const d=el('details');d.className='completedGroup';d.open=!!expanded;d.append(el('summary','已完成 · '+done.length));const fill=()=>{if(d.open&&d.children.length===1)d.append(...done.map(row))};d.ontoggle=fill;fill();host.append(d);bindTaskRows(d,done)}
   if(showingPicks)drawPicks();
 }
 function drawPicks(){
@@ -981,7 +1038,7 @@ function recordEdit(s,key,value){
   queueEdit(s);
 }
 async function openTask(t){if(!await finishEdit())return;const r=records.get(taskKey(t.id));if(!r||r.data.deleted)return;showingPicks=false;mountEditor(r);render()}
-function bindStepDrag(steps,host,moveStep){
+function bindRowDrag(group,host,move,rowSelector,labelSelector){
   let drag=null,frame=0,hold=0,ignoreClick=false;
   function clearMark(){
     drag.mark?.classList.remove('stepBefore','stepAfter');
@@ -991,6 +1048,12 @@ function bindStepDrag(steps,host,moveStep){
     frame=0;
     if(!drag.row.isConnected){finish(false);return}
     const d=drag,box=host.getBoundingClientRect();
+    if(d.row.parentElement!==group){finish(false);return}
+    if(group.childElementCount!==d.childCount){
+      d.childCount=group.childElementCount;
+      d.rows=[...group.querySelectorAll(':scope > '+rowSelector)];
+      d.others=d.rows.filter(r=>r!==d.row);
+    }
     const inPanel=d.x>=box.left&&d.x<=box.right;
     const edge=Math.min(52,box.height/5);
     const speed=d.y<box.top+edge?-Math.ceil((box.top+edge-d.y)/4):d.y>box.bottom-edge?Math.ceil((d.y-box.bottom+edge)/4):0;
@@ -1012,7 +1075,7 @@ function bindStepDrag(steps,host,moveStep){
   }
   function activate(){
     if(!drag||!drag.row.isConnected){finish(false);return}
-    steps.querySelector(':focus')?.blur();
+    group.querySelector(':focus')?.blur();
     host.classList.add('sortingSteps');
     window.getSelection()?.removeAllRanges();
     drag.active=true;ignoreClick=true;drag.scroll=host.scrollTop;
@@ -1022,10 +1085,11 @@ function bindStepDrag(steps,host,moveStep){
   function begin(e,x,y){
     if(drag)finish(false);
     ignoreClick=false;
-    const row=e.target.closest('.step');
-    if(busy||!row||steps.children.length<2||e.target.closest('input,textarea,button:not(.stepLabel)'))return;
-    const rows=[...steps.children];
-    drag={row,from:rows.indexOf(row),others:rows.filter(r=>r!==row),startX:x,startY:y,x,y,active:false};
+    const row=e.target.closest(rowSelector);
+    if(busy||!row||e.target.closest('input,textarea,button:not('+labelSelector+')'))return;
+    const rows=[...group.querySelectorAll(':scope > '+rowSelector)];
+    if(rows.length<2)return;
+    drag={row,rows,from:rows.indexOf(row),others:rows.filter(r=>r!==row),startX:x,startY:y,x,y,active:false};
   }
   function travel(x,y,touch){
     if(!drag)return;
@@ -1043,36 +1107,39 @@ function bindStepDrag(steps,host,moveStep){
     if(drop&&d.active&&d.row.isConnected){paint();cancelAnimationFrame(frame);frame=0}
     host.classList.remove('sortingSteps');
     clearMark();drag=null;d.row.style.transform='';d.row.classList.remove('stepLifted');
-    if(drop&&d.active&&d.row.isConnected&&d.to!==d.from)moveStep(d.from,d.to);
+    if(drop&&d.active&&d.row.isConnected&&d.to!==d.from)move(d.from,d.to,d.rows);
   }
-  steps.addEventListener('touchstart',e=>{
+  group.addEventListener('touchstart',e=>{
     if(e.touches.length!==1){finish(false);return}
     const t=e.touches[0];begin(e,t.clientX,t.clientY);
     if(drag)hold=setTimeout(activate,380);
   },{passive:true});
-  steps.addEventListener('touchmove',e=>{
+  group.addEventListener('touchmove',e=>{
     if(!drag)return;
     if(e.touches.length!==1){finish(false);return}
     if(drag.active)e.preventDefault();
     const t=e.touches[0];travel(t.clientX,t.clientY,true);
   },{passive:false});
-  steps.addEventListener('touchend',e=>{
+  group.addEventListener('touchend',e=>{
     if(drag?.active){e.preventDefault();drag.y=e.changedTouches[0].clientY;drag.x=e.changedTouches[0].clientX}
     finish(true);
   },{passive:false});
-  steps.addEventListener('touchcancel',()=>finish(false));
-  steps.onpointerdown=e=>{
+  group.addEventListener('touchcancel',()=>finish(false));
+  group.onpointerdown=e=>{
     if(e.pointerType==='touch'||e.button!==0)return;
     begin(e,e.clientX,e.clientY);
     if(drag){e.target.setPointerCapture(e.pointerId);drag.pointer=e.pointerId}
   };
-  steps.onpointermove=e=>{if(drag&&e.pointerId===drag.pointer)travel(e.clientX,e.clientY,false)};
-  steps.onpointerup=e=>{if(drag&&e.pointerId===drag.pointer){drag.y=e.clientY;drag.x=e.clientX;finish(true)}};
-  steps.onlostpointercapture=e=>{if(drag&&e.pointerId===drag.pointer)finish(false)};
-  steps.onselectstart=steps.oncontextmenu=e=>{
-    if(drag||!e.target.closest('textarea,input'))e.preventDefault();
-  };
-  steps.addEventListener('click',e=>{
+  group.onpointermove=e=>{if(drag&&e.pointerId===drag.pointer)travel(e.clientX,e.clientY,false)};
+  group.onpointerup=e=>{if(drag&&e.pointerId===drag.pointer){drag.y=e.clientY;drag.x=e.clientX;finish(true)}};
+  group.onlostpointercapture=e=>{if(drag&&e.pointerId===drag.pointer)finish(false)};
+  group.onselectstart=e=>{if(!e.target.closest('textarea,input'))e.preventDefault()};
+  group.addEventListener('contextmenu',e=>{
+    if(drag||rowSelector==='.step'&&!e.target.closest('textarea,input')){
+      e.preventDefault();e.stopPropagation();
+    }
+  },true);
+  group.addEventListener('click',e=>{
     if(ignoreClick&&(e.detail||e.pointerType==='touch')){e.preventDefault();e.stopImmediatePropagation();ignoreClick=false}
   },true);
 }
@@ -1100,7 +1167,7 @@ function mountEditor(record){
     const [step]=draftSteps.splice(from,1);draftSteps.splice(to,0,step);
     drawSteps();saveSteps();
   }
-  bindStepDrag(steps,host,moveStep);
+  bindRowDrag(steps,host,moveStep,'.step','.stepLabel');
   function removeStep(index){
     if(!confirm('删除步骤「'+draftSteps[index].title+'」？'))return;
     draftSteps.splice(index,1);
@@ -1579,8 +1646,8 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function makeBackup(map) {
   const pick = prefix => [...map].filter(([path]) => path.startsWith(prefix)).map(([, record]) => record.data);
   return {format:backupFormat, version:2, exportedAt:new Date().toISOString(),
-    fields:{groups:'Each group has an id and name. Ungrouped groups and deleted lists can carry deleted=true.',lists:'group references groups.id. Empty or absent means ungrouped. In each group, including ungrouped, lists with a nonnegative integer position come first in ascending order from 0. Break ties and order unpositioned lists by Chinese name (numeric collation), then id. The task sort field accepts star, due, day, name, or created (default). Empty groups and lists are retained.',
-      tasks:'list references lists.id. An empty list identifies an unassigned task from an older version. day and due are local YYYY-MM-DD dates. My Day includes tasks with day equal to today and also open tasks due today unless optional dayDismissed equals today. Exclude deleted tasks and deleted lists. created is Unix milliseconds. done, star, deleted and steps[].done are booleans. Optional repeat: daily, weekdays, weekly, monthly, yearly. repeatAnchor is the calendar reference date.',
+    fields:{groups:'Each group has an id and name. Ungrouped groups and deleted lists can carry deleted=true.',lists:'group references groups.id. Empty or absent means ungrouped. In each group, including ungrouped, lists with a nonnegative integer position come first in ascending order from 0. Break ties and order unpositioned lists by Chinese name (numeric collation), then id. The task sort field accepts star, due, day, name, created, or manual (default). Empty groups and lists are retained.',
+      tasks:'list references lists.id. An empty list identifies an unassigned task from an older version. day and due are local YYYY-MM-DD dates. My Day includes tasks with day equal to today and also open tasks due today unless optional dayDismissed equals today. Exclude deleted tasks and deleted lists. created is Unix milliseconds. Manual ordering uses optional listRank, dayRank, starRank, planRank, searchRank or legacyRank per view. Sort ascending by the hex rank prefix plus the hyphenless task ID and 8. Default prefix is (2^53-1 minus created) as 14 hex digits, preceded in Planned by YYYYMMDD. done, star, deleted and steps[].done are booleans. Optional repeat: daily, weekdays, weekly, monthly, yearly. repeatAnchor is the calendar reference date.',
       restore:'Write groups, lists and tasks as UTF-8 JSON in groups/{id}.json, lists/{id}.json and tasks/{id}.json in an initialized private data repo. Retain IDs and list links. Independent programs can read the arrays directly.'},
     groups:pick('groups/'), lists:pick('lists/'), tasks:pick('tasks/')};
 }
