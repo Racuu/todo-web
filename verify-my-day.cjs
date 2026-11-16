@@ -2,6 +2,71 @@ const {chromium} = require('playwright-core');
 const {readFileSync} = require('node:fs');
 const assert = require('node:assert/strict');
 
+async function verifyStorage(page) {
+  const result = await page.evaluate(async () => {
+    const list={id:crypto.randomUUID(),name:'布局验证'};
+    const task={...freshTask('测试任务',list.id),note:'测试备注',steps:[{title:'第二步',done:true}]};
+    const old={format:backupFormat,version:2,groups:[],lists:[list],tasks:[task]};
+    const files=readBackup(old), path=taskKey(task.id);
+    const backup=makeBackup(files);
+    const versions=[1,2,3].map(version=>readBackup({...backup,version}).get(path)?.data);
+    const stored=new Map();
+    const originalApi=api;
+    let rejected=false;
+    try {
+      api=async (url,options)=>{
+        if(options?.method==='PUT'&&url==='/contents/'+path){
+          stored.set('revision',JSON.parse(options.body).content);
+          return {content:{sha:'revision'}};
+        }
+        if(url==='/git/blobs/revision')return {content:stored.get('revision')};
+        throw Error('意外请求 '+url);
+      };
+      const edited={...task,note:'另一端应能读到的备注'};
+      await pushTask({ref:'main'},path,{base:{data:task,sha:'original'},data:edited},{});
+      const tree={tree:[{path,type:'blob',sha:'revision'}]};
+      const other=await loadRecords('tree',new Map(),{},tree);
+      if(!equal(other.get(path).data,edited))throw Error('分目录任务跨端回读失败');
+      try{await loadRecords('tree',new Map(),{},{tree:[{path:'tasks/'+task.id+'.json',type:'blob'}]})}
+      catch(e){rejected=e.message.includes('路径')}
+    }finally{api=originalApi}
+    async function seedOld(repo,pending){
+      await new Promise((resolve,reject)=>{
+        const req=indexedDB.open(key+':files:'+repo+':main',1);
+        req.onupgradeneeded=()=>{
+          req.result.createObjectStore('files').put({data:task},'tasks/'+task.id+'.json');
+          const drafts=req.result.createObjectStore('drafts');
+          if(pending)drafts.put({data:task},'tasks/'+task.id+'.json');
+        };
+        req.onerror=()=>reject(req.error);
+        req.onsuccess=()=>{req.result.close();resolve()};
+      });
+    }
+    await seedOld('fixture/clean',false);
+    const clean=await openDevice('fixture/clean','main');await readDevice(clean);
+    const empty=clean.confirmed.size===0;clean.db.close();
+    await seedOld('fixture/pending',true);
+    let preserved=false;
+    try{await openDevice('fixture/pending','main')}catch(e){
+      if(!e.message.includes('待同步'))throw e;
+      preserved=await new Promise((resolve,reject)=>{
+        const req=indexedDB.open(key+':files:fixture/pending:main',1);
+        req.onerror=()=>reject(req.error);
+        req.onsuccess=()=>{
+          const db=req.result,tx=db.transaction(['drafts','files']);
+          const d=tx.objectStore('drafts').count(),f=tx.objectStore('files').count();
+          tx.oncomplete=()=>{db.close();resolve(d.result===1&&f.result===1)};
+        };
+      });
+    }
+    return {ok:empty&&preserved&&rejected&&versions.every(t=>equal(t,task))&&backup.version===3&&
+      path==='tasks/'+task.id[0]+'/'+task.id+'.json',guide:backup.fields.restore,link:backup.fields.guide};
+  });
+  assert.ok(result.ok,'存储布局、缓存升级或备份恢复不一致');
+  assert.ok(readFileSync('docs/data.md','utf8').includes(result.guide),'导出文件与恢复说明不同步');
+  assert.ok(result.link.endsWith('/docs/data.md#备份与恢复'));
+}
+
 async function run() {
   const browser = await chromium.launch({channel: 'chrome'});
   try {
@@ -12,6 +77,7 @@ async function run() {
       ? route.fulfill({contentType: 'text/html; charset=utf-8', body: html})
       : route.abort());
     await page.goto(url);
+    await verifyStorage(page);
     await page.evaluate(async () => {
       const list = {id: crypto.randomUUID(), name: '验收清单'};
       const tasks = ['详情用例', '右键用例'].map(name => freshTask(name, list.id));

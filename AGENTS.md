@@ -12,7 +12,7 @@
 | 任务标题截断、长按误选、步骤拖动排序、步骤删除确认、备注全选、截止日期、今天到期自动加入我的一天、计划内、重复 | [任务与日期](docs/product.md#任务与日期) | `mountEditor`、`bindRowDrag`、`datePicker`、`myDayDate`、`plannedBuckets` |
 | 挪动清单、拖动任务排序、归属、删除后找回 | [关系与排序](docs/data.md#关系与排序) | `placeList`、`compareListPosition`、`bindTaskRows`、`compareTasks`、`ungroup`、`removeList` |
 | IndexedDB、本机缓存、打开慢、改动卡顿、两端不同步、令牌、同时编辑 | [同步与令牌](docs/data.md#同步与令牌) | `connect`、`readDevice`、`stageTask`、`refresh`、`commitChanges` |
-| 导出、导入、筛选、换工具恢复 | [备份与恢复](docs/data.md#备份与恢复) | `makeBackup`、`readBackup`、`restoreMissing` |
+| 导出、导入、分目录路径、筛选、换工具恢复 | [备份与恢复](docs/data.md#备份与恢复) | `restoreGuide`、`taskKey`、`makeBackup`、`readBackup`、`restoreMissing` |
 | 验证、上线、回退、接着上次做 | [维护与交接](docs/maintenance.md) | — |
 
 每次以当前仓库版本核对本次索引指向，再独立搜索界面文案、操作入口、调用处及共用逻辑。两边有差异时先查明原因。交付前按实际差异核对索引；新增入口、路径或函数改名时，同批修正引用。

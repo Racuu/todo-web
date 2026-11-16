@@ -180,7 +180,8 @@ const button=(txt,action)=>{const b=el('button',txt);b.type='button';b.onclick=a
 const smart=[['day','☼','我的一天'],['star','☆','重要'],['plan','▦','计划内']];
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 const key='zhuri:'+location.pathname;let pendingAdd=null;let config=null, branch='', records=new Map(),view='home',editing=null,busy=false,refreshing=false,epoch=0;
-const groupKey=id=>'groups/'+id+'.json',listKey=id=>'lists/'+id+'.json',taskKey=id=>'tasks/'+id+'.json';
+const groupKey=id=>'groups/'+id+'.json',listKey=id=>'lists/'+id+'.json';
+function taskKey(id){return 'tasks/'+id[0].toLowerCase()+'/'+id+'.json'}
 const entries=kind=>[...records].filter(([p])=>p.startsWith(kind+'/')).map(([,v])=>v.data);
 const listTitle=id=>records.get(listKey(id))?.data.name||'待归类';
 const sortedLists=()=>entries('lists').filter(l=>!l.deleted).sort(nameCompare);
@@ -1265,9 +1266,9 @@ function encode(d){const bytes=new TextEncoder().encode(JSON.stringify(d,null,2)
 // Updating a draft, or acknowledging an upload, is a single transaction.
 let device=null, uploadTimer=0, uploading=null, retryAt=0, lastCheck=0, headSeen='';
 let syncError='', statusText='', editorPaint=0;
-function headKey(dev){return key+':head:'+dev.repo.toLowerCase()+':'+dev.ref}
+function headKey(dev){return key+':sharded-head:'+dev.repo.toLowerCase()+':'+dev.ref}
 function rememberHead(dev,head){if(dev!==device)return;headSeen=head;try{localStorage.setItem(headKey(dev),head)}catch{}}
-const changesChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('to-doo:'+key):null;
+const changesChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('to-doo:sharded:'+key):null;
 if(changesChannel)changesChannel.onmessage=async({data})=>{
   const dev=device;if(!dev||data.repo!==dev.repo||data.ref!==dev.ref)return;
   try{
@@ -1287,10 +1288,33 @@ function projectFiles(confirmed,drafts){
 }
 function openDevice(repo,ref){
   return new Promise((resolve,reject)=>{
-    const req=indexedDB.open(key+':files:'+repo.toLowerCase()+':'+ref,1);
-    req.onupgradeneeded=()=>{req.result.createObjectStore('files');req.result.createObjectStore('drafts')};
-    req.onerror=()=>reject(Error('无法打开本机存储：'+req.error.message));
-    req.onsuccess=()=>resolve({db:req.result,repo,ref,confirmed:new Map(),drafts:new Map()});
+    const req=indexedDB.open(key+':files:'+repo.toLowerCase()+':'+ref,2);
+    let problem='',blocked=false;
+    req.onblocked=()=>{
+      blocked=true;
+      reject(Error('请关闭本设备上的其他 To Doo 页面，再重新打开。'));
+    };
+    req.onupgradeneeded=event=>{
+      const tx=req.transaction;
+      if(blocked){tx.abort();return}
+      if(event.oldVersion===0){
+        req.result.createObjectStore('files');req.result.createObjectStore('drafts');return;
+      }
+      const pending=tx.objectStore('drafts').count();
+      pending.onsuccess=()=>{
+        if(pending.result){
+          problem='旧版仍有待同步修改，已保留本机数据。请先处理未同步内容。';
+          tx.abort();
+        }else tx.objectStore('files').clear();
+      };
+    };
+    req.onerror=()=>reject(Error(problem||'无法打开本机存储：'+req.error.message));
+    req.onsuccess=()=>{
+      const db=req.result;
+      if(blocked){db.close();return}
+      db.onversionchange=()=>db.close();
+      resolve({db,repo,ref,confirmed:new Map(),drafts:new Map()});
+    };
   });
 }
 function transaction(dev,names,mode,work){
@@ -1311,15 +1335,6 @@ function readStore(dev,name){
 }
 async function readDevice(dev){
   [dev.confirmed,dev.drafts]=await Promise.all([readStore(dev,'files'),readStore(dev,'drafts')]);
-  // Import the old snapshot once, including session-only snapshots.
-  const legacy=key+':snapshot:'+dev.repo.toLowerCase()+':'+dev.ref;
-  if(!dev.confirmed.size){
-    let raw=sessionStorage.getItem(legacy)||localStorage.getItem(legacy);
-    if(raw){
-      let files;try{files=new Map(JSON.parse(raw))}catch{files=new Map()}
-      if(files.size){await persistRemote(dev,files);sessionStorage.removeItem(legacy);localStorage.removeItem(legacy)}
-    }
-  }
 }
 async function persistRemote(dev,next){
   const old=new Map(dev.confirmed),applied=new Map();
@@ -1539,14 +1554,22 @@ function showConflict(){
 async function loadRecords(treeRef=branch,source=device?.confirmed||records,account=config,snapshot=null){
   const tree=snapshot||await api('/git/trees/'+encodeURIComponent(treeRef)+'?recursive=1',{},account);
   if(tree.truncated)throw Error('仓库文件过多，无法完整载入。');
-  const files=tree.tree.filter(f=>f.type==='blob'&&/^(groups|lists|tasks)\/[a-f\d-]{36}\.json$/.test(f.path));
+  const files=tree.tree.filter(f=>{
+    if(f.type!=='blob')return false;
+    if(!f.path.startsWith('tasks/'))return /^(groups|lists)\/[a-f\d-]{36}\.json$/i.test(f.path);
+    if(!f.path.endsWith('.json'))return false;
+    const id=f.path.split('/').pop().slice(0,-5);
+    if(!uuid.test(id)||f.path!==taskKey(id))throw Error('云端含旧路径或异常路径的任务，请核对目录迁移后重试。');
+    return true;
+  });
   const next=new Map(),missing=[];
   for(const f of files){
     const old=source.get(f.path);
     if(old?.sha===f.sha)next.set(f.path,old);else missing.push(f);
   }
   function add(f,data){
-    if(f.path!==f.path.split('/')[0]+'/'+data.id+'.json')throw Error('任务文件格式无效');
+    const kind=f.path.split('/')[0];
+    if(!uuid.test(data.id)||f.path!==(kind==='tasks'?taskKey(data.id):kind+'/'+data.id+'.json'))throw Error('任务文件格式无效');
     next.set(f.path,{sha:f.sha,data});
   }
   if(!missing.length&&next.size===source.size)return source;
@@ -1643,16 +1666,17 @@ async function change(fn,local=false){
 }
 const backupFormat = 'to-doo-backup';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const restoreGuide='将每条记录写为 UTF-8 JSON。组写入 groups/{id}.json，清单写入 lists/{id}.json，任务写入 tasks/{首位}/{id}.json。首位取任务 UUID 的第一个字符并转为小写（0–9 或 a–f），文件名保留原 ID。保留全部字段、空组、空清单和删除标记。用清单的 group 关联组 ID，用任务的 list 关联清单 ID，按原字段恢复步骤和排序。';
 function makeBackup(map) {
   const pick = prefix => [...map].filter(([path]) => path.startsWith(prefix)).map(([, record]) => record.data);
-  return {format:backupFormat, version:2, exportedAt:new Date().toISOString(),
+  return {format:backupFormat, version:3, exportedAt:new Date().toISOString(),
     fields:{groups:'Each group has an id and name. Ungrouped groups and deleted lists can carry deleted=true.',lists:'group references groups.id. Empty or absent means ungrouped. In each group, including ungrouped, lists with a nonnegative integer position come first in ascending order from 0. Break ties and order unpositioned lists by Chinese name (numeric collation), then id. The task sort field accepts star, due, day, name, created, or manual (default). Empty groups and lists are retained.',
       tasks:'list references lists.id. An empty list identifies an unassigned task from an older version. day and due are local YYYY-MM-DD dates. My Day includes tasks with day equal to today and also open tasks due today unless optional dayDismissed equals today. Exclude deleted tasks and deleted lists. created is Unix milliseconds. Manual ordering uses optional listRank, dayRank, starRank, planRank, searchRank or legacyRank per view. Sort ascending by the hex rank prefix plus the hyphenless task ID and 8. Default prefix is (2^53-1 minus created) as 14 hex digits, preceded in Planned by YYYYMMDD. done, star, deleted and steps[].done are booleans. Optional repeat: daily, weekdays, weekly, monthly, yearly. repeatAnchor is the calendar reference date.',
-      restore:'Write groups, lists and tasks as UTF-8 JSON in groups/{id}.json, lists/{id}.json and tasks/{id}.json in an initialized private data repo. Retain IDs and list links. Independent programs can read the arrays directly.'},
+      restore:restoreGuide,guide:'https://github.com/Racuu/todo-web/blob/main/docs/data.md#备份与恢复'},
     groups:pick('groups/'), lists:pick('lists/'), tasks:pick('tasks/')};
 }
 function readBackup(data) {
-  if(data?.format!==backupFormat || ![1,2].includes(data.version) || (data.version===2&&!Array.isArray(data.groups)) || !Array.isArray(data.lists) || !Array.isArray(data.tasks)) throw Error('请选择 To Doo 的 JSON 完整备份（第 1 或第 2 版）。');
+  if(data?.format!==backupFormat || ![1,2,3].includes(data.version) || (data.version>=2&&!Array.isArray(data.groups)) || !Array.isArray(data.lists) || !Array.isArray(data.tasks)) throw Error('请选择 To Doo 的 JSON 完整备份（第 1 至第 3 版）。');
   const map=new Map(), text=s=>typeof s==='string', date=s=>text(s)&&(!s||/^\d{4}-\d{2}-\d{2}$/.test(s));
   function add(path,record){if(map.has(path))throw Error('备份中有重复编号。');map.set(path,{data:record})}
   for(const g of data.groups||[]){
