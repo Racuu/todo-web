@@ -112,6 +112,23 @@ async function run() {
     await page.setViewportSize({width:1280,height:720});
     await listLink.click();
     await task('详情用例').locator('.title').click();
+    const input=page.getByRole('textbox',{name:'添加步骤'});
+    await input.fill('跨行显示的示例步骤，用于检查添加框与步骤文字的起始位置。');
+    await input.press('Enter');
+    await page.locator('#detail .stepLabel').first().waitFor();
+    for(const width of [1280,390]){
+      await page.setViewportSize({width,height:844});
+      const offsets=await page.locator('#detail .taskCard').evaluate(card=>{
+        const textLeft=e=>e.getBoundingClientRect().left+parseFloat(getComputedStyle(e).paddingLeft)+e.clientLeft;
+        const center=e=>e.getBoundingClientRect().left+e.getBoundingClientRect().width/2;
+        return [
+          textLeft(card.querySelector('.stepLabel'))-textLeft(card.querySelector('.stepAdd input')),
+          center(card.querySelector('.step input'))-center(card.querySelector('.stepAdd button'))
+        ];
+      });
+      assert.ok(offsets.every(delta=>Math.abs(delta)<=1),'步骤与添加行未对齐 '+width+' '+offsets);
+    }
+    await page.setViewportSize({width:1280,height:720});
     await page.getByRole('button',{name:'添加到“我的一天”',exact:true}).click();
     await page.getByRole('button',{name:'已添加到“我的一天”'}).waitFor();
     await day.click();
