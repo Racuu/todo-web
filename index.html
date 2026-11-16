@@ -32,12 +32,12 @@
 .planGroup{margin:0 0 7px;border-bottom:1px solid #d5e2f1;padding:6px 0 9px}.rows .planGroup>summary{display:inline-flex;align-items:center;gap:9px;padding:5px 10px;background:#e0ebfa;color:#234365;border-radius:5px;font-weight:650;list-style:none}.planGroup>summary::-webkit-details-marker{display:none}.planGroup>summary::before{content:'';width:7px;height:7px;border:solid currentColor;border-width:1.5px 1.5px 0 0;transform:rotate(45deg);margin:0 3px 0 0}.planGroup[open]>summary::before{transform:rotate(135deg)}.planGroup>summary small{font-size:13px;font-weight:450}.planGroup[open]>summary{margin-bottom:8px}
 #detail .editorHead{min-height:24px;justify-content:flex-end;gap:12px}.editorHead button{width:32px;height:30px;font-size:23px;line-height:1;padding:0}
 #detail .taskCard,#detail .detailCard,.detailNote{border:1px solid #dae4f0;border-radius:6px;background:white;margin:10px 0;padding:8px;width:100%}.taskCard .editTitle{padding:3px 0}.editTitle textarea{font-size:18px}
-.taskCard{--step-control:32px;--step-gap:4px;--step-inset:6px}
+.taskCard{--step-control:32px;--step-gap:10px}
 .taskCard .step,.taskCard .stepAdd{display:grid;grid-template-columns:var(--step-control) minmax(0,1fr);column-gap:var(--step-gap);align-items:center}
 .taskCard .step{grid-template-columns:var(--step-control) minmax(0,1fr) auto}
 .taskCard .step>input[type=checkbox]{justify-self:center;margin:0}
 .taskCard .stepAdd{padding:0}
-.taskCard .stepAdd input{padding-inline:var(--step-inset)}
+.taskCard .stepAdd input{padding-inline:0 6px}
 .taskCard .stepAdd button{min-height:40px;padding:0;display:grid;place-items:center}
 @media(pointer:coarse){.taskCard{--step-control:44px}.taskCard .stepAdd button{min-height:44px}}
 .stepAdd input::placeholder{color:#205ba5}
@@ -113,7 +113,7 @@ html,body{background:#f0f5ff;overscroll-behavior:none}
 #detail .stepText textarea{-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
 #detail .sortingSteps,#detail .sortingSteps *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .stepText{display:grid;flex:1;min-width:0}
-.stepText::after,.stepText textarea,.stepText .stepLabel{grid-area:1/1;box-sizing:border-box;margin:0;padding:8px var(--step-inset);border:0;font:inherit;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.stepText::after,.stepText textarea,.stepText .stepLabel{grid-area:1/1;box-sizing:border-box;margin:0;padding:8px 6px 8px 0;border:0;font:inherit;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
 .stepText::after{content:attr(data-text) " ";visibility:hidden}
 #detail .stepText textarea{min-height:0;height:100%;resize:none;overflow:hidden;background:transparent}
 #detail .stepLabel{width:100%;min-width:0;text-align:left;display:block;color:inherit;background:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
