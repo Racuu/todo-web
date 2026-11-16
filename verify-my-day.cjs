@@ -116,6 +116,15 @@ async function run() {
     await input.fill('跨行显示的示例步骤，用于检查添加框与步骤文字的起始位置。');
     await input.press('Enter');
     await page.locator('#detail .stepLabel').first().waitFor();
+    const step=page.locator('#detail .step').first();
+    const check=step.getByRole('checkbox');
+    const label=step.locator('.stepLabel');
+    const stepStyle=()=>label.evaluate(el=>[getComputedStyle(el).color,getComputedStyle(el).textDecorationLine]);
+    const initialStyle=await stepStyle();
+    await check.check();
+    assert.deepEqual(await stepStyle(),['rgb(112, 112, 112)','line-through']);
+    await check.uncheck();
+    assert.deepEqual(await stepStyle(),initialStyle);
     for(const width of [1280,390]){
       await page.setViewportSize({width,height:844});
       const offsets=await page.locator('#detail .taskCard').evaluate(card=>{
