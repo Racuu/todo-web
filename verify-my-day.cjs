@@ -82,6 +82,7 @@ async function run() {
       const list = {id: crypto.randomUUID(), name: '验收清单'};
       const tasks = ['详情用例', '右键用例'].map(name => freshTask(name, list.id));
       const repo = 'fixture/my-day';
+      localStorage.setItem(key+':last-list:'+repo,list.id);
       const dev = await openDevice(repo, 'main');
       await persistRemote(dev, new Map([
         [listKey(list.id), {data:list, sha:list.id}],
@@ -94,6 +95,22 @@ async function run() {
     const day = page.locator('#smart button').filter({hasText:'我的一天'});
     const rows = page.locator('#rows article');
     const task = name => rows.filter({hasText:name});
+    const listLink=page.locator('#lists .listLink').filter({hasText:'验收清单'});
+    async function checkHome(){
+      await listLink.waitFor({state:'attached'});
+      assert.equal(await page.locator('#heading').innerText(),'我的一天');
+      assert.equal(await day.getAttribute('aria-current'),'page');
+    }
+    await checkHome();
+    await listLink.click();
+    await page.evaluate(()=>render());
+    assert.equal(await page.locator('#heading').innerText(),'验收清单');
+    await page.setViewportSize({width:390,height:844});
+    await page.reload();
+    await checkHome();
+    assert.ok(await page.locator('#drawer').isVisible());
+    await page.setViewportSize({width:1280,height:720});
+    await listLink.click();
     await task('详情用例').locator('.title').click();
     await page.getByRole('button',{name:'添加到“我的一天”',exact:true}).click();
     await page.getByRole('button',{name:'已添加到“我的一天”'}).waitFor();
@@ -104,6 +121,8 @@ async function run() {
     await task('详情用例').waitFor({state:'detached'});
     await page.getByRole('button',{name:'添加到“我的一天”',exact:true}).waitFor();
     await page.reload();
+    await checkHome();
+    await listLink.click();
     await task('详情用例').waitFor();
     assert.match(await task('详情用例').innerText(),/截止 明天/);
     await day.click();
@@ -130,6 +149,8 @@ async function run() {
     const moved = before[1];
     await page.waitForFunction(name => document.querySelector('#rows .title > span')?.textContent === name,moved);
     await page.reload();
+    await checkHome();
+    await listLink.click();
     await task('右键用例').waitFor();
     assert.deepEqual(await titles.allTextContents(),before,'我的一天拖动影响原清单');
     await day.click();
@@ -156,8 +177,7 @@ async function run() {
     await page.getByRole('button',{name:'已添加到“我的一天”'}).click();
     await task('右键用例').waitFor({state:'detached'});
     await page.reload();
-    await task('右键用例').waitFor();
-    await day.click();
+    await checkHome();
     await task('详情用例').waitFor();
     assert.equal(await rows.count(), 1, '手动移出的任务刷新后被重新加入');
     await task('详情用例').locator('.title').click();
@@ -172,6 +192,8 @@ async function run() {
     await task('详情用例').waitFor({state:'detached'});
     await page.getByRole('button',{name:'添加到“我的一天”',exact:true}).waitFor();
     await page.reload();
+    await checkHome();
+    await listLink.click();
     await task('详情用例').waitFor();
     assert.match(await task('详情用例').innerText(),/截止 明天/);
     await day.click();

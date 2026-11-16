@@ -179,19 +179,14 @@ const $=id=>document.getElementById(id), el=(tag,txt)=>{const e=document.createE
 const button=(txt,action)=>{const b=el('button',txt);b.type='button';b.onclick=action;return b};
 const smart=[['day','☼','我的一天'],['star','☆','重要'],['plan','▦','计划内']];
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
-const key='zhuri:'+location.pathname;let pendingAdd=null;let config=null, branch='', records=new Map(),view='home',editing=null,busy=false,refreshing=false,epoch=0;
+const defaultView='day';
+const key='zhuri:'+location.pathname;let pendingAdd=null;let config=null, branch='', records=new Map(),view=defaultView,editing=null,busy=false,refreshing=false,epoch=0;
 const groupKey=id=>'groups/'+id+'.json',listKey=id=>'lists/'+id+'.json';
 function taskKey(id){return 'tasks/'+id[0].toLowerCase()+'/'+id+'.json'}
 const entries=kind=>[...records].filter(([p])=>p.startsWith(kind+'/')).map(([,v])=>v.data);
 const listTitle=id=>records.get(listKey(id))?.data.name||'待归类';
 const sortedLists=()=>entries('lists').filter(l=>!l.deleted).sort(nameCompare);
-const savedListKey=()=>key+':last-list:'+config.repo.toLowerCase();
 const activeListId=()=>view.startsWith('list:')&&records.has(listKey(view.slice(5)))&&!records.get(listKey(view.slice(5))).data.deleted?view.slice(5):'';
-function defaultView(lists){
-  const remembered=config&&localStorage.getItem(savedListKey());
-  const preferred=lists.find(l=>l.id===remembered)||lists[0];
-  return preferred?'list:'+preferred.id:'home';
-}
 let resumeNewList=false;
 const taskDrafts=new Map();
 let draftList='';
@@ -205,7 +200,7 @@ function nav(container,id,label){
  path.setAttribute('d',glyphs[id]||glyphs.list);svg.append(path);b.append(svg,el('span',label));
  if(id===view){b.className='selected';b.setAttribute('aria-current','page')}container.append(b);
 }
-let filterText='', previousView='home', showingPicks=false, undoTimer;
+let filterText='', previousView=defaultView, showingPicks=false, undoTimer;
 let editorQueue=Promise.resolve();
 function squareTick(){
   const mark=el('span');mark.className='mark';mark.setAttribute('aria-hidden','true');return mark;
@@ -266,7 +261,7 @@ async function returnToLayer(layer='list'){
 async function choose(id){
   if(!await finishEdit())return;
   if(id!=='search'){$('lookup').value='';filterText=''}
-  visibleRowLimit=80;view=id;if(config&&activeListId()){localStorage.setItem(savedListKey(),activeListId());collapsedGroups.delete(records.get(listKey(activeListId())).data.group)}
+  visibleRowLimit=80;view=id;if(activeListId())collapsedGroups.delete(records.get(listKey(activeListId())).data.group);
   closeDetail();setDrawer(false);$('rows').scrollTop=0;render();
 }
 function notifyAction(message,undo){
@@ -954,7 +949,7 @@ function render(){
   if(lastRenderDay!==day)editing?.refreshDates?.();
   lastRenderDay=day;
   const all=entries('tasks'),lists=sortedLists(),hasLegacy=all.some(t=>!t.deleted&&!t.list);
-  if(view==='home'||(view==='legacy'&&!hasLegacy)||(view.startsWith('list:')&&!activeListId()))view=defaultView(lists);
+  if((view==='legacy'&&!hasLegacy)||(view.startsWith('list:')&&!activeListId()))view=defaultView;
   const currentList=activeListId(),matches=all.filter(t=>inView(t,view,day));
   if(draftList!==currentList){
     if(draftList)taskDrafts.set(draftList,$('quick').value);
@@ -970,7 +965,7 @@ function render(){
   const parent=current?.group&&records.get(groupKey(current.group))?.data;
   $('groupPath').hidden=!parent||!!parent.deleted;$('groupPath').textContent=parent&&!parent.deleted?parent.name:'';
   $('listOptions').hidden=!currentList;
-  $('heading').textContent=view==='home'?'我的清单':view==='legacy'?'待归类':view==='search'?'搜索结果':smart.find(x=>x[0]===view)?.[2]||listTitle(view.slice(5));
+  $('heading').textContent=view==='legacy'?'待归类':view==='search'?'搜索结果':smart.find(x=>x[0]===view)?.[2]||listTitle(view.slice(5));
   $('stamp').textContent=view==='day'?new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'}):(view==='search'?filterText:view==='legacy'?'用任务右侧的「⋯」把旧任务移入清单。':'');
   $('suggest').hidden=view!=='day';$('suggest').setAttribute('aria-expanded',String(showingPicks));
   $('add').hidden=!currentList;$('smart').replaceChildren();$('lists').replaceChildren();
@@ -994,9 +989,10 @@ function render(){
       star:['还没有重要任务','点击清单中任务右侧的星标，就会在这里看到它。'],
       plan:['还没有计划内任务','为清单中的任务设置截止日期，就会在这里看到它。']
     };
-    const [title,help]=copy[view]||['清单里还没有任务','在下方输入第一条任务，按回车即可添加。'];
+    const needsFirstList=view==='day'&&!lists.length&&!hasLegacy;
+    const [title,help]=copy[needsFirstList?'home':view]||['清单里还没有任务','在下方输入第一条任务，按回车即可添加。'];
     blank.append(el('h2',title),el('p',help));
-    if(view==='home'){const create=button('新建清单',newList);create.className='primary';blank.append(create)}
+    if(needsFirstList){const create=button('新建清单',newList);create.className='primary';blank.append(create)}
     host.append(blank);
   }else if(view==='legacy'&&!lists.length){const create=button('新建清单',newList);create.className='primary';host.append(create)}
   const activeTasks=matches.filter(t=>!t.done);
@@ -1830,7 +1826,7 @@ $('settings').onclick=showSetup;$('drawer').onclick=()=>setDrawer(!$('side').cla
 $('setup').addEventListener('cancel',()=>{resumeNewList=false});
 function clearWorkspace(){
   collapsedGroups.clear();pendingAdd=null;draftList='';taskDrafts.clear();$('quick').value='';
-  view=previousView='home';filterText='';$('lookup').value='';closeDetail();
+  view=previousView=defaultView;filterText='';$('lookup').value='';closeDetail();
 }
 async function disconnect(){
   const dev=device;
