@@ -54,6 +54,23 @@ async function run() {
     await day.click();
     await task('右键用例').waitFor();
     assert.deepEqual(await titles.allTextContents(),before.slice().reverse(),'拖动位置没有保存');
+    // A held touch must move the row without selecting text or opening the task.
+    await page.setViewportSize({width:390,height:844});
+    const touch = await page.context().newCDPSession(page);
+    await touch.send('Emulation.setTouchEmulationEnabled',{enabled:true});
+    const origin = await rows.last().locator('.title').boundingBox();
+    const destination = await rows.first().boundingBox();
+    const point = {x:origin.x+origin.width/2,y:origin.y+origin.height/2};
+    await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+    await page.locator('#rows article.stepLifted').waitFor({timeout:4000});
+    await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:point.x,y:destination.y+3}]});
+    await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await page.waitForFunction(name => document.querySelector('#rows .title > span')?.textContent === name,before[0]);
+    assert.ok(await page.locator('#detail').isHidden());
+    assert.equal(await page.evaluate(() => String(window.getSelection())), '');
+    await touch.send('Emulation.setTouchEmulationEnabled',{enabled:false});
+    await touch.detach();
+    await page.setViewportSize({width:1280,height:720});
     await task('右键用例').locator('.title').click();
     await page.getByRole('button',{name:'已添加到“我的一天”'}).click();
     await task('右键用例').waitFor({state:'detached'});
