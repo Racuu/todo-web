@@ -224,6 +224,24 @@ async function run() {
     assert.match(await task('详情用例').innerText(),/截止 明天/);
     await day.click();
     assert.equal(await rows.count(),0,'改期后刷新仍留在我的一天');
+    await listLink.click();
+    await page.evaluate(async()=>{
+      const peers=entries('tasks').filter(t=>t.list===activeListId()&&!t.deleted);
+      await updateTask(peers[0].id,{listRank:'04'});
+      await updateTask(peers[1].id,{listRank:'08'});
+    });
+    const priorOrder=await titles.allTextContents();
+    for(const name of ['首条新增','再次新增']){
+      await page.locator('#quick').fill(name);
+      await page.locator('#quick').press('Enter');
+      await task(name).waitFor();
+    }
+    const expected=['再次新增','首条新增',...priorOrder];
+    assert.deepEqual(await titles.allTextContents(),expected,'拖动后的任务挡住了新增任务');
+    await page.reload();
+    await listLink.click();
+    await task('再次新增').waitFor();
+    assert.deepEqual(await titles.allTextContents(),expected,'刷新后新增任务的位置改变');
     console.log('日期联动、手动移出、任务拖动、刷新持久化和窄栏布局通过');
   } finally {
     await browser.close();

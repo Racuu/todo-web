@@ -625,10 +625,26 @@ function compareTasks(mode){
 function taskRankField(viewId){
   return viewId.startsWith('list:')?'listRank':viewId+'Rank';
 }
+const creationRank=t=>(Number.MAX_SAFE_INTEGER-t.created).toString(16).padStart(14,'0');
 function taskRank(task,field){
-  const time=(Number.MAX_SAFE_INTEGER-task.created).toString(16).padStart(14,'0');
+  const time=creationRank(task);
   const date=field==='planRank'?(task.due||'').replaceAll('-',''):'';
   return (typeof task[field]==='string'&&/^[0-9a-f]+$/.test(task[field])?task[field]:date+time)+task.id.replaceAll('-','')+'8';
+}
+function newListTask(title,list){
+  const task=freshTask(title,list);
+  let first='';
+  for(const peer of entries('tasks')){
+    if(peer.list!==list||peer.done||peer.deleted)continue;
+    const key=taskRank(peer,'listRank');
+    if(!first||key<first)first=key;
+  }
+  if(first&&taskRank(task,'listRank')>=first){
+    // Share the current leading zeros so successive additions can still sort by time.
+    task.listRank=first.match(/^0*/)[0]+creationRank(task);
+    if(taskRank(task,'listRank')>=first)task.listRank='0'+task.listRank;
+  }
+  return task;
 }
 // Pick a hex prefix strictly between two keys. An ID suffix breaks ties across devices.
 function rankBetween(lower,upper){
@@ -1799,7 +1815,7 @@ $('add').onsubmit=async e=>{
   e.preventDefault();
   const list=activeListId(),title=$('quick').value.trim();
   if(!list||!title||busy)return;
-  if(!pendingAdd||pendingAdd.title!==title||pendingAdd.list!==list)pendingAdd={title,list,task:freshTask(title,list)};
+  if(!pendingAdd||pendingAdd.title!==title||pendingAdd.list!==list)pendingAdd={title,list,task:newListTask(title,list)};
   const t=pendingAdd.task;
   await change(async()=>{
     if(!records.has(taskKey(t.id)))await storeFile(taskKey(t.id),t);
